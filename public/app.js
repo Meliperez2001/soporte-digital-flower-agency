@@ -47,7 +47,9 @@ function mostrar(id) {
   clearInterval(poll); poll = null;
   if (id === 'vista-lista') { cargarLista(); poll = setInterval(cargarLista, 15000); }
   if (id === 'vista-chat') { poll = setInterval(() => cargarMensajes(false), 6000); }
-  window.scrollTo(0, 0);
+  /* App shell: el scroll vive en el área de contenido, no en la ventana.
+     Al cambiar de vista, esa área vuelve arriba. */
+  $(id).scrollTop = 0;
 }
 function salir() {
   token = ''; yo = null; casoActual = null;

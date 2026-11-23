@@ -19,16 +19,23 @@
 /* El atributo hidden manda siempre: sin esto, reglas como .vista-chat{display:flex}
    o .stickers{display:flex} lo pisan y las vistas "ocultas" quedan visibles. */
 [hidden]{display:none !important}
+html{height:100%}
 html,body{margin:0;padding:0}
 body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
   color:var(--texto);
-  min-height:100vh;
+  /* App shell: la pantalla nunca hace scroll como página web; el alto es
+     fijo y solo se mueve el área de contenido (.vista / .chat-mensajes). */
+  height:100dvh;
+  overflow:hidden;
+  overscroll-behavior:none;
   display:flex;flex-direction:column;
 }
 .topbar{
-  position:sticky;top:0;z-index:10;
+  /* Barra fija del shell: es un elemento del layout en columna, no se
+     desplaza nunca (sin sticky: la página entera ya no hace scroll). */
+  flex:none;z-index:10;
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   /* El fondo púrpura cubre también la zona de la barra de estado, pero el
      contenido queda por debajo del reloj / Dynamic Island (safe-area). */
@@ -42,7 +49,12 @@ body{
 .brand small{opacity:.85;font-size:12px}
 .top-actions{display:flex;align-items:center;gap:8px}
 .quien{font-size:13px;opacity:.95}
-.vista{width:min(920px,100%);margin:0 auto;padding:18px 14px 30px;flex:1}
+.vista{
+  width:min(920px,100%);margin:0 auto;padding:18px 14px 30px;
+  /* Único contenedor con scroll del shell (fuera de la vista de chat). */
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
 .card{
   background:var(--tarjeta);border:1px solid var(--borde);border-radius:var(--radio);
   box-shadow:var(--sombra);padding:20px;margin-bottom:16px;
@@ -114,17 +126,22 @@ h3{color:var(--purpura-oscuro)}
   background:var(--grave);color:#fff;border-radius:999px;min-width:22px;height:22px;
   display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;padding:0 6px;
 }
-.vista-chat{display:flex;flex-direction:column;gap:10px}
-.chat-head{display:flex;gap:10px;align-items:center}
+/* Vista de chat: cabecera fija, mensajes con su propio scroll y composer
+   fijo abajo, todo dentro del shell (la vista en sí no hace scroll). */
+.vista-chat{display:flex;flex-direction:column;gap:10px;overflow:hidden}
+.chat-head{display:flex;gap:10px;align-items:center;flex:none}
 .chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff}
 .chat-titulo h2{margin:0}
 .detalles summary{cursor:pointer;font-weight:700;color:var(--purpura-oscuro)}
-.detalles{padding:14px 18px}
+.detalles{padding:14px 18px;flex:none;max-height:45%;overflow-y:auto;overscroll-behavior:contain}
 .check{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;font-size:14px}
 .check li::before{content:"⬜ ";color:var(--muted)}
 .check li.ok::before{content:"✅ "}
 .chat-mensajes{
-  display:flex;flex-direction:column;gap:8px;padding:16px 10px;min-height:300px;
+  display:flex;flex-direction:column;gap:8px;padding:16px 10px;
+  /* La zona de mensajes es la que se desplaza dentro del chat. */
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
   background:rgba(255,255,255,.65);border:1px solid var(--borde);border-radius:var(--radio);
 }
 .msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:15px;line-height:1.35;box-shadow:0 2px 8px rgba(117,29,149,.08)}
@@ -140,7 +157,9 @@ h3{color:var(--purpura-oscuro)}
 }
 .msg audio{max-width:100%}
 .chat-input{
-  position:sticky;bottom:0;background:var(--tarjeta);border:1px solid var(--borde);
+  /* Composer fijo del shell del chat: último elemento de la columna,
+     siempre visible abajo sin necesidad de sticky. */
+  flex:none;background:var(--tarjeta);border:1px solid var(--borde);
   border-radius:var(--radio);box-shadow:var(--sombra);
   padding:10px 10px calc(10px + env(safe-area-inset-bottom));
 }
@@ -151,7 +170,7 @@ h3{color:var(--purpura-oscuro)}
 .stickers{display:flex;gap:6px;flex-wrap:wrap;padding:8px 4px}
 .stickers button{font-size:30px;background:var(--rosa-suave);border:1px solid var(--borde);border-radius:12px;padding:6px 10px;cursor:pointer}
 .grabando{color:var(--grave);font-size:13px;margin:8px 2px 0}
-.pie{text-align:center;color:var(--muted);padding:14px;font-size:13px}
+.pie{text-align:center;color:var(--muted);padding:10px 14px;font-size:13px;flex:none}
 @media (max-width:560px){
   .brand small{display:none}
   .msg{max-width:88%}
