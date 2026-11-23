@@ -4,7 +4,7 @@
    respaldo si no hay conexión: así, tras cada despliegue, la computadora
    y el teléfono reciben enseguida la versión nueva en vez de quedarse
    con la anterior guardada en caché. */
-const CACHE = 'soporte-dfa-v10';
+const CACHE = 'soporte-dfa-v11';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

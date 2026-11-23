@@ -152,23 +152,22 @@ h3{color:var(--purpura-oscuro)}
 .foto-campo label.btn{display:inline-block;cursor:pointer;font-weight:700;font-size:14px}
 /* Fila de mensaje: avatar + burbuja */
 .msg-row{position:relative;display:flex;gap:8px;align-items:flex-end;width:100%;transition:transform .18s ease;touch-action:pan-y}
-/* Botón visible ⋮ de opciones del mensaje (responder / eliminar): en la
-   computadora aparece al pasar el mouse sobre el mensaje; en pantallas
-   táctiles se ve siempre, tenue. Es el equivalente con mouse de la
-   pulsación larga y del clic derecho. */
+/* Botón visible ⋮ de opciones del mensaje (responder / eliminar):
+   SIEMPRE visible, en computadora y en teléfono, pegado a la burbuja.
+   Es un elemento más de la fila (no absoluto): en los mensajes ajenos
+   queda justo a la derecha de la burbuja y en los propios, por el
+   row-reverse, justo a su izquierda. Antes era absoluto con left/right:0
+   sobre la fila completa y opacity:0 hasta el hover: caía en la orilla
+   contraria de la pantalla, lejos de la burbuja, y no se veía (en los
+   audios el único ⋮ cercano era el del reproductor <audio>). */
 .btn-opciones-msg{
-  position:absolute;top:0;z-index:2;
-  width:26px;height:26px;border-radius:50%;flex:none;
+  position:static;flex:none;align-self:flex-start;
+  width:28px;height:28px;border-radius:50%;
   background:var(--tarjeta);border:1px solid var(--borde);box-shadow:var(--sombra);
-  color:var(--muted);font-size:15px;line-height:1;cursor:pointer;padding:0;
-  opacity:0;transition:opacity .15s ease;
+  color:var(--purpura-oscuro);font-size:16px;font-weight:700;line-height:1;cursor:pointer;padding:0;
+  opacity:1;
 }
-.msg-row.mio .btn-opciones-msg{left:0}
-.msg-row.ajeno .btn-opciones-msg{right:0}
-.msg-row:hover .btn-opciones-msg,.msg-row:focus-within .btn-opciones-msg{opacity:1}
-@media (hover:none){
-  .btn-opciones-msg{opacity:.75}
-}
+.btn-opciones-msg:hover,.btn-opciones-msg:focus-visible{background:var(--rosa-suave)}
 /* Botón visible ⋮ de opciones del caso en la lista (solo administradoras):
    abre el menú de eliminar caso sin clic derecho ni pulsación larga. */
 .btn-opciones{
