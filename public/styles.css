@@ -137,9 +137,43 @@ h3{color:var(--purpura-oscuro)}
 .foto-campo .hint{margin:6px 0 0}
 .foto-campo label.btn{display:inline-block;cursor:pointer;font-weight:700;font-size:14px}
 /* Fila de mensaje: avatar + burbuja */
-.msg-row{display:flex;gap:8px;align-items:flex-end;width:100%}
+.msg-row{display:flex;gap:8px;align-items:flex-end;width:100%;transition:transform .18s ease;touch-action:pan-y}
 .msg-row.mio{flex-direction:row-reverse}
 .msg-row .msg{min-width:0}
+/* Cita del mensaje respondido, dentro de la burbuja (tipo WhatsApp) */
+.msg .cita{
+  display:block;background:rgba(0,0,0,.07);border-left:3px solid var(--purpura-claro);
+  border-radius:8px;padding:6px 9px;margin-bottom:6px;font-size:13px;line-height:1.3;
+}
+.msg .cita strong{display:block;color:var(--purpura-oscuro);font-size:12px}
+.msg .cita span{display:block;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.msg.propio .cita{background:rgba(255,255,255,.18);border-left-color:var(--rosa)}
+.msg.propio .cita strong{color:#fff}
+/* Marca de mensaje eliminado */
+.msg.eliminado{font-style:italic;opacity:.8;font-size:14px}
+/* Menú de opciones del mensaje (responder / eliminar) */
+.msg-menu{
+  position:fixed;z-index:50;min-width:180px;
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:14px;
+  box-shadow:var(--sombra);padding:6px;display:flex;flex-direction:column;gap:2px;
+}
+.msg-menu button{
+  background:none;border:none;text-align:left;padding:10px 12px;border-radius:10px;
+  font:inherit;font-size:15px;color:var(--texto);cursor:pointer;
+}
+.msg-menu button:hover{background:var(--rosa-suave)}
+/* Barra de "respondiendo a…" sobre el composer */
+.reply-bar{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  background:var(--rosa-suave);border:1px solid var(--borde);border-left:4px solid var(--purpura);
+  border-radius:12px;padding:8px 10px;
+}
+.reply-bar-texto{flex:1;min-width:0;font-size:13px}
+.reply-bar-texto strong{display:block;color:var(--purpura-oscuro);font-size:12px}
+.reply-bar-texto span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+.reply-bar .btn-ghost{color:var(--purpura-oscuro);padding:4px 8px;flex:none}
+.btn-peligro{background:#fdeceb;color:var(--grave);border:1px solid #f5c6c2}
+.btn-peligro:hover{background:#fadbd8}
 .caso-info{flex:1;min-width:0}
 .caso-info .t{font-weight:700}
 .caso-info .s{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

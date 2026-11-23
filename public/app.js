@@ -11,6 +11,10 @@ const STICKERS = ['🌸', '💜', '🦋', '🌷', '💐', '✨', '🙏', '💪',
 let token = localStorage.getItem('sdfa_token') || '';
 let yo = null;
 let casoActual = null;
+/* Mensajes del caso abierto, por id (para responder y eliminar). */
+let mensajesPorId = new Map();
+/* Mensaje al que se está respondiendo (cita tipo WhatsApp), o null. */
+let respondiendoA = null;
 let filtroEstado = 'todos';
 let poll = null;
 let deferredInstall = null;
@@ -297,6 +301,8 @@ async function abrirCaso(id) {
   try {
     const { caso } = await api('/api/cases/' + id);
     casoActual = caso;
+    cancelarRespuesta();
+    cerrarMenuMsg();
     $('chat-titulo').textContent = caso.titulo;
     $('chat-sub').textContent = textoChatSub(caso);
     pintarAvatar($('chat-avatar'), caso.creadoraNombre, caso.creadoraFoto);
@@ -348,17 +354,50 @@ $('btn-admin-guardar').onclick = async () => {
     abrirCaso(casoActual.id);
   } catch (err) { alert(err.message); }
 };
-$('btn-volver').onclick = () => { casoActual = null; mostrar('vista-lista'); };
+$('btn-volver').onclick = () => { casoActual = null; cancelarRespuesta(); cerrarMenuMsg(); mostrar('vista-lista'); };
+
+/* Eliminar el caso completo (solo administradora, con confirmación) */
+$('btn-eliminar-caso').onclick = async () => {
+  if (!casoActual || yo.rol !== 'admin') return;
+  if (!confirm(`¿Eliminar el caso "${casoActual.titulo}"? Se borra el caso completo con su chat y sus adjuntos. Esto no se puede deshacer.`)) return;
+  try {
+    await api(`/api/cases/${casoActual.id}`, { method: 'DELETE' });
+    casoActual = null;
+    cancelarRespuesta();
+    mostrar('vista-lista');
+  } catch (err) { alert(err.message); }
+};
+
+/* Extracto de un mensaje para citarlo al responder (espejo del servidor). */
+function extractoLocal(m) {
+  if (m.eliminado) return 'Mensaje eliminado';
+  if (m.tipo === 'texto') return String(m.texto || '').slice(0, 120);
+  if (m.tipo === 'sticker') return '🌸 Sticker';
+  if (m.tipo === 'audio') return '🎤 Nota de voz';
+  if ((m.mime || '').startsWith('image/')) return '🖼️ Foto';
+  if ((m.mime || '').startsWith('video/')) return '🎬 Video';
+  return '📄 ' + (m.nombreArchivo || 'Documento');
+}
 
 async function cargarMensajes(bajar) {
   if (!casoActual) return;
   try {
     const { mensajes } = await api(`/api/cases/${casoActual.id}/messages`);
+    mensajesPorId = new Map(mensajes.map((m) => [m.id, m]));
     const caja = $('chat-mensajes');
     const estabaAbajo = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
     caja.innerHTML = mensajes.map((m) => {
-      const mio = rolVista() === 'admin' ? m.autor === 'admin' : m.autor === 'creadora';
-      const clase = m.tipo === 'sticker' ? 'msg sticker' : `msg ${mio ? 'propio' : 'ajeno'}`;
+      /* Cada quien ve SUS mensajes (texto, stickers y adjuntos) siempre de
+         su lado: la clase propio/ajeno se aplica a TODOS los tipos. */
+      const mio = m.autorId === yo.id;
+      const lado = mio ? 'propio' : 'ajeno';
+      if (m.eliminado) {
+        return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}" data-id="${m.id}">
+          ${avatarHTML(m.autorNombre, m.autorFoto, 'avatar-msg')}
+          <div class="msg ${lado} eliminado">🚫 Mensaje eliminado</div>
+        </div>`;
+      }
+      const clase = m.tipo === 'sticker' ? `msg sticker ${lado}` : `msg ${lado}`;
       let cuerpo = '';
       if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
       else if (m.tipo === 'sticker') cuerpo = esc(m.texto);
@@ -366,10 +405,14 @@ async function cargarMensajes(bajar) {
       else if ((m.mime || '').startsWith('image/')) cuerpo = `<a href="${urlAdjunto(m)}" target="_blank"><img src="${urlAdjunto(m)}" alt="foto"></a>`;
       else if ((m.mime || '').startsWith('video/')) cuerpo = `<video controls src="${urlAdjunto(m)}"></video>`;
       else cuerpo = `<a class="doc" href="${urlAdjunto(m)}" target="_blank">📄 ${esc(m.nombreArchivo || 'Documento')}</a>`;
-      return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}">
+      const cita = m.respuesta
+        ? `<div class="cita"><strong>${esc(m.respuesta.autorNombre || '')}</strong><span>${esc(m.respuesta.texto || '')}</span></div>`
+        : '';
+      return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}" data-id="${m.id}">
         ${avatarHTML(m.autorNombre, m.autorFoto, 'avatar-msg')}
         <div class="${clase}">
           ${m.tipo !== 'sticker' ? `<div class="autor">${esc(m.autorNombre || '')}</div>` : ''}
+          ${cita}
           ${cuerpo}
           <div class="hora">${hora(m.createdAt)}</div>
         </div>
@@ -379,13 +422,30 @@ async function cargarMensajes(bajar) {
   } catch (e) { /* poll silencioso */ }
 }
 
+/* ---------------- Responder con cita (tipo WhatsApp) ---------------- */
+function activarRespuesta(m) {
+  if (!m || m.eliminado) return;
+  respondiendoA = m;
+  $('reply-autor').textContent = 'Respondiendo a ' + (m.autorNombre || '');
+  $('reply-extracto').textContent = extractoLocal(m);
+  $('reply-bar').hidden = false;
+  $('input-texto').focus();
+}
+function cancelarRespuesta() {
+  respondiendoA = null;
+  $('reply-bar').hidden = true;
+}
+$('btn-cancelar-respuesta').onclick = cancelarRespuesta;
+
 async function enviarTexto() {
   if (bloqueadoPorPreview()) return;
   const t = $('input-texto').value.trim();
   if (!t || !casoActual) return;
   $('input-texto').value = ''; autoAltura();
+  const citaId = respondiendoA ? respondiendoA.id : undefined;
+  cancelarRespuesta();
   try {
-    await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ texto: t }) });
+    await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ texto: t, respuestaA: citaId }) });
     cargarMensajes(true);
   } catch (e) { alert(e.message); }
 }
@@ -406,18 +466,18 @@ for (const b of $('stickers').querySelectorAll('button')) {
   b.onclick = async () => {
     $('stickers').hidden = true;
     if (bloqueadoPorPreview()) return;
+    const citaId = respondiendoA ? respondiendoA.id : undefined;
+    cancelarRespuesta();
     try {
-      await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ sticker: b.dataset.s }) });
+      await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ sticker: b.dataset.s, respuestaA: citaId }) });
       cargarMensajes(true);
     } catch (e) { alert(e.message); }
   };
 }
 
-/* Adjuntos */
-$('btn-adjuntar').onclick = () => $('input-file').click();
-$('input-file').onchange = async () => {
-  const f = $('input-file').files[0];
-  $('input-file').value = '';
+/* Adjuntos: cada tipo con su propio botón y su propio selector —
+   🖼️ fotos, 🎬 videos y 📎 archivos/PDF. */
+async function subirAdjunto(f) {
   if (!f || !casoActual) return;
   if (bloqueadoPorPreview()) return;
   const fd = new FormData(); fd.append('file', f);
@@ -427,7 +487,15 @@ $('input-file').onchange = async () => {
     if (!r.ok) throw new Error(d.error || 'No se pudo subir el archivo.');
     cargarMensajes(true);
   } catch (e) { alert(e.message); }
-};
+}
+for (const [btnId, inputId] of [['btn-foto', 'input-foto'], ['btn-video', 'input-video'], ['btn-archivo', 'input-archivo']]) {
+  $(btnId).onclick = () => $(inputId).click();
+  $(inputId).onchange = () => {
+    const f = $(inputId).files[0];
+    $(inputId).value = '';
+    subirAdjunto(f);
+  };
+}
 
 /* Notas de voz */
 let recorder = null, chunks = [];
@@ -454,6 +522,118 @@ $('btn-audio').onclick = async () => {
     alert('Para mandar notas de voz hay que permitir el micrófono.');
   }
 };
+
+/* ------------- Opciones del mensaje: responder y eliminar -------------
+   - Teléfono: deslizar el mensaje a la izquierda = responder; mantener
+     presionado = menú de opciones.
+   - Computadora: clic derecho sobre el mensaje = menú (Responder /
+     Eliminar). */
+const menuMsg = document.createElement('div');
+menuMsg.className = 'msg-menu';
+menuMsg.hidden = true;
+menuMsg.innerHTML = `
+  <button type="button" data-acc="responder">↩️ Responder</button>
+  <button type="button" data-acc="eliminar">🗑️ Eliminar</button>`;
+document.body.appendChild(menuMsg);
+let menuMsgId = null;
+
+function cerrarMenuMsg() {
+  menuMsg.hidden = true;
+  menuMsgId = null;
+}
+function puedeEliminar(m) {
+  return yo && (yo.rol === 'admin' || m.autorId === yo.id);
+}
+let menuAbiertoEn = 0;
+function abrirMenuMsg(m, x, y) {
+  if (!m || m.eliminado) return;
+  menuMsgId = m.id;
+  menuAbiertoEn = Date.now();
+  menuMsg.querySelector('[data-acc="eliminar"]').hidden = !puedeEliminar(m);
+  menuMsg.hidden = false;
+  const ancho = 190, alto = 110;
+  menuMsg.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
+  menuMsg.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
+}
+menuMsg.addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-acc]');
+  if (!b || menuMsgId == null) return;
+  const m = mensajesPorId.get(menuMsgId);
+  const acc = b.dataset.acc;
+  cerrarMenuMsg();
+  if (!m) return;
+  if (acc === 'responder') { activarRespuesta(m); return; }
+  if (acc === 'eliminar') {
+    if (bloqueadoPorPreview()) return;
+    if (!confirm('¿Eliminar este mensaje?')) return;
+    try {
+      await api(`/api/cases/${casoActual.id}/messages/${m.id}`, { method: 'DELETE' });
+      if (respondiendoA && respondiendoA.id === m.id) cancelarRespuesta();
+      cargarMensajes(false);
+    } catch (err) { alert(err.message); }
+  }
+});
+document.addEventListener('click', (e) => {
+  if (menuMsg.hidden || menuMsg.contains(e.target)) return;
+  /* El toque largo que abre el menú genera un click fantasma al soltar el
+     dedo: no debe cerrar el menú que acaba de abrir. */
+  if (Date.now() - menuAbiertoEn < 400) return;
+  cerrarMenuMsg();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenuMsg(); });
+
+const cajaChat = $('chat-mensajes');
+/* Clic derecho (computadora) sobre un mensaje: menú de opciones */
+cajaChat.addEventListener('contextmenu', (e) => {
+  const fila = e.target.closest('.msg-row');
+  if (!fila) return;
+  e.preventDefault();
+  abrirMenuMsg(mensajesPorId.get(Number(fila.dataset.id)), e.clientX, e.clientY);
+});
+/* Táctil: deslizar a la izquierda = responder; mantener presionado = menú */
+let toque = null;
+let timerLargo = null;
+cajaChat.addEventListener('touchstart', (e) => {
+  const fila = e.target.closest('.msg-row');
+  if (!fila || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  toque = { fila, x: t.clientX, y: t.clientY, dx: 0, deslizo: false };
+  clearTimeout(timerLargo);
+  timerLargo = setTimeout(() => {
+    if (toque && !toque.deslizo) {
+      abrirMenuMsg(mensajesPorId.get(Number(fila.dataset.id)), toque.x, toque.y);
+      toque = null;
+    }
+  }, 500);
+}, { passive: true });
+cajaChat.addEventListener('touchmove', (e) => {
+  if (!toque) return;
+  const t = e.touches[0];
+  const dx = t.clientX - toque.x;
+  const dy = t.clientY - toque.y;
+  if (Math.abs(dy) > 12) { clearTimeout(timerLargo); toque.deslizo = true; toque.fila.style.transform = ''; toque = null; return; }
+  if (dx < -8) {
+    toque.deslizo = true;
+    clearTimeout(timerLargo);
+    toque.dx = dx;
+    /* El mensaje acompaña el dedo hasta un tope, como en WhatsApp */
+    toque.fila.style.transform = `translateX(${Math.max(dx, -72)}px)`;
+  }
+}, { passive: true });
+cajaChat.addEventListener('touchend', () => {
+  clearTimeout(timerLargo);
+  if (!toque) return;
+  const { fila, dx, deslizo } = toque;
+  fila.style.transform = '';
+  toque = null;
+  if (deslizo && dx <= -56) {
+    activarRespuesta(mensajesPorId.get(Number(fila.dataset.id)));
+  }
+}, { passive: true });
+cajaChat.addEventListener('touchcancel', () => {
+  clearTimeout(timerLargo);
+  if (toque) { toque.fila.style.transform = ''; toque = null; }
+}, { passive: true });
 
 /* ---------------- Instalación (PWA) ---------------- */
 window.addEventListener('beforeinstallprompt', (e) => {

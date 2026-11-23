@@ -193,6 +193,10 @@
         </label>
         <button class="btn btn-soft" id="btn-admin-guardar" type="button">Guardar</button>
       </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn btn-peligro" id="btn-eliminar-caso" type="button">🗑️ Eliminar caso</button>
+        <span class="hint">Borra el caso completo con su chat y sus adjuntos. No se puede deshacer.</span>
+      </div>
     </div>
   </details>
 
@@ -200,15 +204,26 @@
 
   <section class="chat-input">
     <div id="stickers" class="stickers" hidden></div>
+    <div id="reply-bar" class="reply-bar" hidden>
+      <div class="reply-bar-texto">
+        <strong id="reply-autor"></strong>
+        <span id="reply-extracto"></span>
+      </div>
+      <button id="btn-cancelar-respuesta" class="btn btn-ghost" type="button" title="Cancelar respuesta">✕</button>
+    </div>
     <div class="input-row">
-      <button id="btn-adjuntar" class="btn btn-icon" title="Adjuntar foto, video, documento o PDF" type="button">📎</button>
-      <button id="btn-sticker" class="btn btn-icon" title="Stickers" type="button">🌸</button>
+      <button id="btn-foto" class="btn btn-icon" title="Enviar una foto" type="button">🖼️</button>
+      <button id="btn-video" class="btn btn-icon" title="Enviar un video" type="button">🎬</button>
+      <button id="btn-archivo" class="btn btn-icon" title="Enviar un archivo o PDF" type="button">📎</button>
+      <button id="btn-sticker" class="btn btn-icon" title="Stickers" type="button">😊</button>
       <textarea id="input-texto" rows="1" placeholder="Escribe tu mensaje y pulsa Enter para enviar…"></textarea>
       <button id="btn-audio" class="btn btn-icon" title="Grabar nota de voz" type="button">🎤</button>
       <button id="btn-enviar" class="btn btn-primary" type="button">Enviar</button>
     </div>
     <p id="grabando" class="grabando" hidden>🔴 Grabando… pulsa de nuevo el micrófono para enviar la nota de voz.</p>
-    <input type="file" id="input-file" hidden accept="image/*,video/*,application/pdf,.doc,.docx,.txt,.zip,audio/*">
+    <input type="file" id="input-foto" hidden accept="image/*">
+    <input type="file" id="input-video" hidden accept="video/*">
+    <input type="file" id="input-archivo" hidden accept="application/pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx,audio/*">
   </section>
 </main>
 

@@ -90,16 +90,20 @@ function casoResumen(caso) {
     ...caso,
     creadoraFoto: fotoDe(caso.creadoraId),
     totalMensajes: msgs.length,
-    sinLeerAdmin: msgs.filter((m) => m.autor === 'creadora' && !m.leidoAdmin).length,
-    sinLeerCreadora: msgs.filter((m) => m.autor !== 'creadora' && !m.leidoCreadora).length,
+    sinLeerAdmin: msgs.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length,
+    sinLeerCreadora: msgs.filter((m) => m.autor !== 'creadora' && !m.leidoCreadora && !m.eliminado).length,
     ultimoMensaje: ultimo
-      ? { tipo: ultimo.tipo, texto: ultimo.texto ? ultimo.texto.slice(0, 80) : '', createdAt: ultimo.createdAt }
+      ? {
+          tipo: ultimo.tipo,
+          texto: ultimo.eliminado ? 'Mensaje eliminado' : ultimo.texto ? ultimo.texto.slice(0, 80) : '',
+          createdAt: ultimo.createdAt,
+        }
       : null,
   };
 }
 function evidenciaDe(caso) {
   const msgs = db.messages.filter((m) => m.casoId === caso.id);
-  const adjuntos = msgs.filter((m) => m.tipo === 'archivo' || m.tipo === 'audio');
+  const adjuntos = msgs.filter((m) => (m.tipo === 'archivo' || m.tipo === 'audio') && !m.eliminado);
   return {
     linkVideo: Boolean(caso.linkVideo),
     pps: Boolean(caso.pps),
@@ -304,6 +308,23 @@ app.patch('/api/cases/:id', auth, soloAdmin, (req, res) => {
   res.json({ caso: casoResumen(caso) });
 });
 
+/** Eliminar un caso completo (solo la administradora): borra el caso, sus
+    mensajes y los archivos adjuntos guardados en disco. */
+app.delete('/api/cases/:id', auth, soloAdmin, (req, res) => {
+  const caso = getCasoVisible(req, res);
+  if (!caso) return;
+  const msgs = db.messages.filter((m) => m.casoId === caso.id);
+  for (const m of msgs) {
+    if (m.archivo && m.archivo.startsWith('/uploads/')) {
+      fs.unlink(path.join(UPLOADS_DIR, path.basename(m.archivo)), () => {});
+    }
+  }
+  db.messages = db.messages.filter((m) => m.casoId !== caso.id);
+  db.cases = db.cases.filter((c) => c.id !== caso.id);
+  save();
+  res.json({ ok: true });
+});
+
 /** La creadora puede completar datos de su caso (link del video, PPS, si ya apeló) */
 app.patch('/api/cases/:id/datos', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
@@ -340,6 +361,28 @@ app.get('/api/cases/:id/messages', auth, (req, res) => {
   res.json({ mensajes: msgs.map((m) => ({ ...m, autorFoto: fotoDe(m.autorId) })) });
 });
 
+/** Extracto corto de un mensaje, para citarlo al responder (tipo WhatsApp).
+    Se guarda una copia (snapshot) en el mensaje nuevo: si el original se
+    borra después, la cita sigue viéndose. */
+function extractoDe(m) {
+  if (m.eliminado) return 'Mensaje eliminado';
+  if (m.tipo === 'texto') return String(m.texto || '').slice(0, 120);
+  if (m.tipo === 'sticker') return '🌸 Sticker';
+  if (m.tipo === 'audio') return '🎤 Nota de voz';
+  if ((m.mime || '').startsWith('image/')) return '🖼️ Foto';
+  if ((m.mime || '').startsWith('video/')) return '🎬 Video';
+  return '📄 ' + (m.nombreArchivo || 'Documento');
+}
+/** Si el cuerpo trae respuestaA (id de mensaje del mismo caso), construye
+    la cita; si no, devuelve null. */
+function citaDesde(req, caso) {
+  const id = Number((req.body || {}).respuestaA);
+  if (!id) return null;
+  const orig = db.messages.find((m) => m.id === id && m.casoId === caso.id);
+  if (!orig) return null;
+  return { id: orig.id, autorNombre: orig.autorNombre || '', texto: extractoDe(orig) };
+}
+
 function guardarMensaje(req, res, datos) {
   const caso = getCasoVisible(req, res);
   if (!caso) return null;
@@ -354,6 +397,8 @@ function guardarMensaje(req, res, datos) {
     leidoCreadora: req.user.rol !== 'admin',
     ...datos,
   };
+  const cita = citaDesde(req, caso);
+  if (cita) msg.respuesta = cita;
   db.messages.push(msg);
   caso.updatedAt = msg.createdAt;
   if (caso.estado === 'nuevo' && req.user.rol === 'admin') caso.estado = 'esperando_evidencia';
@@ -367,6 +412,28 @@ app.post('/api/cases/:id/messages', auth, (req, res) => {
   if (sticker) return void guardarMensaje(req, res, { tipo: 'sticker', texto: String(sticker).slice(0, 8) });
   if (!texto || !String(texto).trim()) return res.status(400).json({ error: 'El mensaje está vacío.' });
   guardarMensaje(req, res, { tipo: 'texto', texto: String(texto).trim().slice(0, 4000) });
+});
+
+/** Eliminar un mensaje: lo puede borrar quien lo escribió o la
+    administradora. Queda una marca "Mensaje eliminado" en el chat. */
+app.delete('/api/cases/:id/messages/:mid', auth, (req, res) => {
+  const caso = getCasoVisible(req, res);
+  if (!caso) return;
+  const msg = db.messages.find((m) => m.id === Number(req.params.mid) && m.casoId === caso.id);
+  if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado.' });
+  if (req.user.rol !== 'admin' && msg.autorId !== req.user.id) {
+    return res.status(403).json({ error: 'Solo puedes eliminar tus propios mensajes.' });
+  }
+  if (msg.archivo && msg.archivo.startsWith('/uploads/')) {
+    fs.unlink(path.join(UPLOADS_DIR, path.basename(msg.archivo)), () => {});
+  }
+  msg.eliminado = true;
+  msg.texto = '';
+  msg.archivo = null;
+  msg.nombreArchivo = null;
+  msg.mime = null;
+  save();
+  res.json({ ok: true });
 });
 
 /* Adjuntos: fotos, videos, documentos, PDF y notas de voz */
