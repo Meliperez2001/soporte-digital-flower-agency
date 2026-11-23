@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Soporte Digital Flower Agency</title>
+<meta name="description" content="Soporte y apelaciones de Digital Flower Agency. Abre tu caso y conversa en privado con la agencia.">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#751d95">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Soporte DFA">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-flower" aria-hidden="true">🌸</span>
+    <div>
+      <strong>Soporte Digital Flower Agency</strong>
+      <small>Soporte y apelaciones · Digital Flower Agency</small>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="btn-instalar" class="btn btn-soft" hidden>Instalar la aplicación</button>
+    <span id="quien" class="quien"></span>
+    <button id="btn-salir" class="btn btn-ghost" hidden>Salir</button>
+  </div>
+</header>
+
+<main id="vista-auth" class="vista">
+  <section class="card auth-card">
+    <h1>🌸 Bienvenida</h1>
+    <p class="muted">Este es el espacio privado de soporte de la agencia. Cada caso es personal: solo tú y la administradora pueden ver tu chat.</p>
+    <div class="tabs">
+      <button id="tab-login" class="tab activa" type="button">Iniciar sesión</button>
+      <button id="tab-registro" class="tab" type="button">Crear cuenta</button>
+    </div>
+    <form id="form-login" class="form">
+      <label>Correo electrónico <input type="email" id="login-email" required autocomplete="email"></label>
+      <label>Contraseña <input type="password" id="login-pass" required autocomplete="current-password"></label>
+      <button class="btn btn-primary" type="submit">Entrar</button>
+      <p class="error" id="login-error"></p>
+    </form>
+    <form id="form-registro" class="form" hidden>
+      <label>Tu nombre <input type="text" id="reg-nombre" required autocomplete="name"></label>
+      <label>Correo electrónico <input type="email" id="reg-email" required autocomplete="email"></label>
+      <label>Tu @ de TikTok <input type="text" id="reg-tiktok" placeholder="@tuusuario"></label>
+      <label>Contraseña <input type="password" id="reg-pass" required minlength="6" autocomplete="new-password"></label>
+      <button class="btn btn-primary" type="submit">Crear mi cuenta</button>
+      <p class="error" id="reg-error"></p>
+      <p class="muted small">No compartas tu contraseña con nadie. La agencia nunca te la va a pedir por chat.</p>
+    </form>
+  </section>
+</main>
+
+<main id="vista-lista" class="vista" hidden>
+  <section class="panel-head">
+    <h2 id="lista-titulo">Mis casos</h2>
+    <button id="btn-nuevo-caso" class="btn btn-primary">+ Abrir un caso</button>
+  </section>
+  <div id="admin-resumen" class="resumen" hidden></div>
+  <div id="filtros-estado" class="filtros" hidden></div>
+  <div id="lista-casos" class="lista-casos"></div>
+  <p id="lista-vacia" class="muted" hidden>Todavía no hay casos aquí.</p>
+</main>
+
+<main id="vista-nuevo" class="vista" hidden>
+  <section class="card">
+    <h2>Abrir mi caso</h2>
+    <p class="muted">Cuéntanos qué pasó con el mayor detalle que puedas. Tu caso es privado: solo lo vemos tú y la administradora.</p>
+    <form id="form-caso" class="form">
+      <label>Título corto
+        <input type="text" id="caso-titulo" placeholder="Ej. Me suspendieron la cuenta" maxlength="120">
+      </label>
+      <label>¿Qué tipo de caso es?
+        <select id="caso-tipo">
+          <option value="apelar">Quiero apelar una infracción</option>
+          <option value="suspension">Cuenta suspendida o restringida</option>
+          <option value="puntos">Me quitaron puntos</option>
+          <option value="fondos">Fondos o comisiones retenidas</option>
+          <option value="funciones">Me quitaron una función (LIVE, muestras, etc.)</option>
+          <option value="otro">Otro</option>
+        </select>
+      </label>
+      <label>¿Qué te pasó? *
+        <textarea id="caso-descripcion" rows="5" required placeholder="Explica por qué te infraccionaron, qué sanciones tienes y desde cuándo…"></textarea>
+      </label>
+      <label>¿Ya apelaste en la app de TikTok?
+        <select id="caso-apelo">
+          <option value="">Todavía no lo sé / no aplica</option>
+          <option value="no">No, aún no he apelado</option>
+          <option value="si">Sí, ya apelé</option>
+        </select>
+      </label>
+      <label>Link del video sancionado
+        <input type="url" id="caso-link" placeholder="https://www.tiktok.com/@.../video/...">
+        <span class="hint">Si tu caso es por un video sancionado, este link es obligatorio: sin él el caso no está completo.</span>
+      </label>
+      <label>Tu PPS (salud de tu cuenta)
+        <input type="text" id="caso-pps" placeholder="Ej. 4.5 / 165 — lo ves en la salud de tu cuenta">
+      </label>
+      <div class="row">
+        <button class="btn btn-primary" type="submit">Abrir caso</button>
+        <button class="btn btn-ghost" type="button" id="btn-cancelar-caso">Cancelar</button>
+      </div>
+      <p class="error" id="caso-error"></p>
+    </form>
+  </section>
+</main>
+
+<main id="vista-chat" class="vista vista-chat" hidden>
+  <section class="chat-head">
+    <button id="btn-volver" class="btn btn-ghost">← Volver</button>
+    <div class="chat-titulo">
+      <h2 id="chat-titulo"></h2>
+      <p id="chat-sub" class="muted small"></p>
+    </div>
+  </section>
+
+  <details class="card detalles" id="panel-detalles">
+    <summary>Detalles y evidencia del caso</summary>
+    <div id="detalles-contenido"></div>
+    <form id="form-datos" class="form">
+      <label>Link del video sancionado <input type="url" id="dato-link" placeholder="https://www.tiktok.com/@.../video/..."></label>
+      <label>Mi PPS (salud de la cuenta) <input type="text" id="dato-pps"></label>
+      <label>¿Ya apelaste?
+        <select id="dato-apelo">
+          <option value="">Sin indicar</option>
+          <option value="no">No, aún no</option>
+          <option value="si">Sí, ya apelé</option>
+        </select>
+      </label>
+      <button class="btn btn-soft" type="submit">Guardar datos</button>
+    </form>
+    <div id="admin-controles" hidden>
+      <h3>Panel de la administradora</h3>
+      <div class="row">
+        <label>Estado
+          <select id="admin-estado"></select>
+        </label>
+        <label>Gravedad
+          <select id="admin-gravedad">
+            <option value="sin_clasificar">Sin clasificar</option>
+            <option value="grave">🚨 Grave</option>
+            <option value="no_grave">No grave</option>
+          </select>
+        </label>
+        <button class="btn btn-soft" id="btn-admin-guardar" type="button">Guardar</button>
+      </div>
+    </div>
+  </details>
+
+  <section id="chat-mensajes" class="chat-mensajes" aria-live="polite"></section>
+
+  <section class="chat-input">
+    <div id="stickers" class="stickers" hidden></div>
+    <div class="input-row">
+      <button id="btn-adjuntar" class="btn btn-icon" title="Adjuntar foto, video, documento o PDF" type="button">📎</button>
+      <button id="btn-sticker" class="btn btn-icon" title="Stickers" type="button">🌸</button>
+      <textarea id="input-texto" rows="1" placeholder="Escribe tu mensaje y pulsa Enter para enviar…"></textarea>
+      <button id="btn-audio" class="btn btn-icon" title="Grabar nota de voz" type="button">🎤</button>
+      <button id="btn-enviar" class="btn btn-primary" type="button">Enviar</button>
+    </div>
+    <p id="grabando" class="grabando" hidden>🔴 Grabando… pulsa de nuevo el micrófono para enviar la nota de voz.</p>
+    <input type="file" id="input-file" hidden accept="image/*,video/*,application/pdf,.doc,.docx,.txt,.zip,audio/*">
+  </section>
+</main>
+
+<footer class="pie">
+  <small>🌸 Soporte Digital Flower Agency · Tu caso es privado: nadie ve el chat de nadie.</small>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+'use strict';
+/* Soporte Digital Flower Agency — lógica del cliente */
+const $ = (id) => document.getElementById(id);
+const ESTADOS = ['nuevo', 'esperando_evidencia', 'evidencia_completa', 'listos', 'resuelto', 'cerrado'];
+const ESTADO_LABELS = {
+  nuevo: 'Nuevo', esperando_evidencia: 'Esperando evidencia', evidencia_completa: 'Evidencia completa',
+  listos: 'Listos', resuelto: 'Resuelto', cerrado: 'Cerrado',
+};
+const STICKERS = ['🌸', '💜', '🦋', '🌷', '💐', '✨', '🙏', '💪', '👍', '❤️', '🌺', '🍀'];
+
+let token = localStorage.getItem('sdfa_token') || '';
+let yo = null;
+let casoActual = null;
+let filtroEstado = 'todos';
+let poll = null;
+let deferredInstall = null;
+
+/* ---------------- API ---------------- */
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { salir(); throw new Error(data.error || 'Sesión expirada'); }
+  if (!r.ok) throw new Error(data.error || 'Algo salió mal, inténtalo de nuevo.');
+  return data;
+}
+function urlAdjunto(m) {
+  return m.archivo + '?token=' + encodeURIComponent(token);
+}
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hora(iso) {
+  try {
+    return new Date(iso).toLocaleString('es', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  } catch (e) { return ''; }
+}
+
+/* ---------------- Vistas ---------------- */
+function mostrar(id) {
+  for (const v of ['vista-auth', 'vista-lista', 'vista-nuevo', 'vista-chat']) $(v).hidden = v !== id;
+  clearInterval(poll); poll = null;
+  if (id === 'vista-lista') { cargarLista(); poll = setInterval(cargarLista, 15000); }
+  if (id === 'vista-chat') { poll = setInterval(() => cargarMensajes(false), 6000); }
+  window.scrollTo(0, 0);
+}
+function salir() {
+  token = ''; yo = null; casoActual = null;
+  localStorage.removeItem('sdfa_token');
+  $('btn-salir').hidden = true; $('quien').textContent = '';
+  mostrar('vista-auth');
+}
+
+/* ---------------- Autenticación ---------------- */
+$('tab-login').onclick = () => {
+  $('tab-login').classList.add('activa'); $('tab-registro').classList.remove('activa');
+  $('form-login').hidden = false; $('form-registro').hidden = true;
+};
+$('tab-registro').onclick = () => {
+  $('tab-registro').classList.add('activa'); $('tab-login').classList.remove('activa');
+  $('form-registro').hidden = false; $('form-login').hidden = true;
+};
+$('form-login').onsubmit = async (e) => {
+  e.preventDefault(); $('login-error').textContent = '';
+  try {
+    const d = await api('/api/login', { method: 'POST', body: JSON.stringify({ email: $('login-email').value, password: $('login-pass').value }) });
+    entrar(d);
+  } catch (err) { $('login-error').textContent = err.message; }
+};
+$('form-registro').onsubmit = async (e) => {
+  e.preventDefault(); $('reg-error').textContent = '';
+  try {
+    const d = await api('/api/register', {
+      method: 'POST',
+      body: JSON.stringify({ nombre: $('reg-nombre').value, email: $('reg-email').value, tiktok: $('reg-tiktok').value, password: $('reg-pass').value }),
+    });
+    entrar(d);
+  } catch (err) { $('reg-error').textContent = err.message; }
+};
+function entrar(d) {
+  token = d.token; yo = d.user;
+  localStorage.setItem('sdfa_token', token);
+  $('btn-salir').hidden = false;
+  $('quien').textContent = yo.rol === 'admin' ? `🌸 ${yo.nombre} (administradora)` : `Hola, ${yo.nombre}`;
+  $('lista-titulo').textContent = yo.rol === 'admin' ? 'Casos de la agencia' : 'Mis casos';
+  $('btn-nuevo-caso').hidden = yo.rol === 'admin';
+  $('admin-resumen').hidden = yo.rol !== 'admin';
+  $('filtros-estado').hidden = yo.rol !== 'admin';
+  mostrar('vista-lista');
+}
+$('btn-salir').onclick = salir;
+
+/* ---------------- Lista de casos ---------------- */
+async function cargarLista() {
+  try {
+    const { casos } = await api('/api/cases');
+    if (yo.rol === 'admin') {
+      const r = await api('/api/admin/resumen');
+      $('admin-resumen').innerHTML =
+        `<div class="stat"><b>${r.sinLeer}</b>mensajes sin leer</div>` +
+        ESTADOS.map((e) => `<div class="stat"><b>${r.porEstado[e] || 0}</b>${ESTADO_LABELS[e]}</div>`).join('');
+      $('filtros-estado').innerHTML =
+        `<button class="filtro ${filtroEstado === 'todos' ? 'activo' : ''}" data-f="todos">Todos</button>` +
+        ESTADOS.map((e) => `<button class="filtro ${filtroEstado === e ? 'activo' : ''}" data-f="${e}">${ESTADO_LABELS[e]}<span class="n">${r.porEstado[e] || 0}</span></button>`).join('');
+      for (const b of $('filtros-estado').querySelectorAll('.filtro')) {
+        b.onclick = () => { filtroEstado = b.dataset.f; cargarLista(); };
+      }
+    }
+    const visibles = filtroEstado === 'todos' ? casos : casos.filter((c) => c.estado === filtroEstado);
+    $('lista-vacia').hidden = visibles.length > 0;
+    $('lista-casos').innerHTML = visibles.map((c) => {
+      const iniciales = (c.creadoraNombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+      const sinLeer = yo.rol === 'admin' ? c.sinLeerAdmin : c.sinLeerCreadora;
+      const ult = c.ultimoMensaje
+        ? (c.ultimoMensaje.tipo === 'texto' ? esc(c.ultimoMensaje.texto) : c.ultimoMensaje.tipo === 'sticker' ? '🌸 Sticker' : '📎 Adjunto')
+        : 'Sin mensajes';
+      return `<button class="caso-item" data-id="${c.id}">
+        <span class="avatar">${esc(iniciales)}</span>
+        <span class="caso-info">
+          <span class="t">${esc(c.creadoraNombre)} ${c.creadoraTiktok ? `<span class="muted">${esc(c.creadoraTiktok)}</span>` : ''}</span>
+          <span class="s" style="display:block">${esc(c.titulo)} · ${ult}</span>
+          <span class="chips">
+            <span class="chip">${ESTADO_LABELS[c.estado] || c.estado}</span>
+            ${c.gravedad === 'grave' ? '<span class="chip grave">🚨 Grave</span>' : c.gravedad === 'no_grave' ? '<span class="chip nograve">No grave</span>' : ''}
+          </span>
+        </span>
+        ${sinLeer ? `<span class="badge">${sinLeer}</span>` : ''}
+        <span class="muted small">${c.ultimoMensaje ? hora(c.ultimoMensaje.createdAt) : ''}</span>
+      </button>`;
+    }).join('');
+    for (const b of $('lista-casos').querySelectorAll('.caso-item')) {
+      b.onclick = () => abrirCaso(Number(b.dataset.id));
+    }
+  } catch (e) { /* la sesión se maneja en api() */ }
+}
+$('btn-nuevo-caso').onclick = () => mostrar('vista-nuevo');
+$('btn-cancelar-caso').onclick = () => mostrar('vista-lista');
+
+/* ---------------- Abrir caso ---------------- */
+$('form-caso').onsubmit = async (e) => {
+  e.preventDefault(); $('caso-error').textContent = '';
+  try {
+    const d = await api('/api/cases', {
+      method: 'POST',
+      body: JSON.stringify({
+        titulo: $('caso-titulo').value, tipo: $('caso-tipo').value, descripcion: $('caso-descripcion').value,
+        yaApelo: $('caso-apelo').value, linkVideo: $('caso-link').value, pps: $('caso-pps').value,
+      }),
+    });
+    e.target.reset();
+    abrirCaso(d.caso.id);
+  } catch (err) { $('caso-error').textContent = err.message; }
+};
+
+/* ---------------- Chat ---------------- */
+async function abrirCaso(id) {
+  try {
+    const { caso } = await api('/api/cases/' + id);
+    casoActual = caso;
+    $('chat-titulo').textContent = caso.titulo;
+    $('chat-sub').textContent = yo.rol === 'admin'
+      ? `${caso.creadoraNombre} ${caso.creadoraTiktok || ''} · ${ESTADO_LABELS[caso.estado]}`
+      : `Tu caso · ${ESTADO_LABELS[caso.estado]} · Solo tú y la administradora ven este chat`;
+    renderDetalles(caso);
+    mostrar('vista-chat');
+    await cargarMensajes(true);
+  } catch (e) { alert(e.message); }
+}
+function renderDetalles(caso) {
+  const ev = caso.evidencia || {};
+  $('detalles-contenido').innerHTML = `
+    <p class="small muted" style="white-space:pre-wrap">${esc(caso.descripcion)}</p>
+    <ul class="check">
+      <li class="${ev.yaApelo ? 'ok' : ''}">Ya indicó si apeló o no ${caso.yaApelo ? `(dijo que ${caso.yaApelo === 'si' ? 'SÍ' : 'NO'})` : ''}</li>
+      <li class="${ev.linkVideo ? 'ok' : ''}">Link del video sancionado ${caso.linkVideo ? `— <a href="${esc(caso.linkVideo)}" target="_blank" rel="noopener">abrir video</a>` : '(obligatorio si el caso es por un video)'}</li>
+      <li class="${ev.pps ? 'ok' : ''}">PPS / salud de la cuenta ${caso.pps ? `— ${esc(caso.pps)}` : ''}</li>
+      <li class="${ev.fotos ? 'ok' : ''}">Capturas / fotos enviadas (${ev.fotos || 0})</li>
+      <li class="${ev.videos ? 'ok' : ''}">Videos enviados (${ev.videos || 0})</li>
+      <li class="${ev.documentos ? 'ok' : ''}">Documentos o PDF enviados (${ev.documentos || 0})</li>
+      <li class="${ev.audios ? 'ok' : ''}">Notas de voz enviadas (${ev.audios || 0})</li>
+    </ul>`;
+  $('dato-link').value = caso.linkVideo || '';
+  $('dato-pps').value = caso.pps || '';
+  $('dato-apelo').value = caso.yaApelo || '';
+  $('form-datos').style.display = yo.rol === 'admin' ? 'none' : '';
+  $('admin-controles').hidden = yo.rol !== 'admin';
+  if (yo.rol === 'admin') {
+    $('admin-estado').innerHTML = ESTADOS.map((e) => `<option value="${e}" ${e === caso.estado ? 'selected' : ''}>${ESTADO_LABELS[e]}</option>`).join('');
+    $('admin-gravedad').value = caso.gravedad || 'sin_clasificar';
+  }
+}
+$('form-datos').onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    const d = await api(`/api/cases/${casoActual.id}/datos`, {
+      method: 'PATCH',
+      body: JSON.stringify({ linkVideo: $('dato-link').value, pps: $('dato-pps').value, yaApelo: $('dato-apelo').value }),
+    });
+    casoActual = d.caso; renderDetalles(d.caso);
+  } catch (err) { alert(err.message); }
+};
+$('btn-admin-guardar').onclick = async () => {
+  try {
+    await api(`/api/cases/${casoActual.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado: $('admin-estado').value, gravedad: $('admin-gravedad').value }),
+    });
+    abrirCaso(casoActual.id);
+  } catch (err) { alert(err.message); }
+};
+$('btn-volver').onclick = () => { casoActual = null; mostrar('vista-lista'); };
+
+async function cargarMensajes(bajar) {
+  if (!casoActual) return;
+  try {
+    const { mensajes } = await api(`/api/cases/${casoActual.id}/messages`);
+    const caja = $('chat-mensajes');
+    const estabaAbajo = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
+    caja.innerHTML = mensajes.map((m) => {
+      const mio = yo.rol === 'admin' ? m.autor === 'admin' : m.autor === 'creadora';
+      const clase = m.tipo === 'sticker' ? 'msg sticker' : `msg ${mio ? 'propio' : 'ajeno'}`;
+      let cuerpo = '';
+      if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
+      else if (m.tipo === 'sticker') cuerpo = esc(m.texto);
+      else if (m.tipo === 'audio') cuerpo = `<audio controls src="${urlAdjunto(m)}"></audio>`;
+      else if ((m.mime || '').startsWith('image/')) cuerpo = `<a href="${urlAdjunto(m)}" target="_blank"><img src="${urlAdjunto(m)}" alt="foto"></a>`;
+      else if ((m.mime || '').startsWith('video/')) cuerpo = `<video controls src="${urlAdjunto(m)}"></video>`;
+      else cuerpo = `<a class="doc" href="${urlAdjunto(m)}" target="_blank">📄 ${esc(m.nombreArchivo || 'Documento')}</a>`;
+      return `<div class="${clase}">
+        ${m.tipo !== 'sticker' ? `<div class="autor">${esc(m.autorNombre || '')}</div>` : ''}
+        ${cuerpo}
+        <div class="hora">${hora(m.createdAt)}</div>
+      </div>`;
+    }).join('');
+    if (bajar || estabaAbajo) caja.scrollTop = caja.scrollHeight;
+  } catch (e) { /* poll silencioso */ }
+}
+
+async function enviarTexto() {
+  const t = $('input-texto').value.trim();
+  if (!t || !casoActual) return;
+  $('input-texto').value = ''; autoAltura();
+  try {
+    await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ texto: t }) });
+    cargarMensajes(true);
+  } catch (e) { alert(e.message); }
+}
+$('btn-enviar').onclick = enviarTexto;
+$('input-texto').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarTexto(); }
+});
+function autoAltura() {
+  const ta = $('input-texto');
+  ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+$('input-texto').addEventListener('input', autoAltura);
+
+/* Stickers */
+$('stickers').innerHTML = STICKERS.map((s) => `<button type="button" data-s="${s}">${s}</button>`).join('');
+$('btn-sticker').onclick = () => { $('stickers').hidden = !$('stickers').hidden; };
+for (const b of $('stickers').querySelectorAll('button')) {
+  b.onclick = async () => {
+    $('stickers').hidden = true;
+    try {
+      await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ sticker: b.dataset.s }) });
+      cargarMensajes(true);
+    } catch (e) { alert(e.message); }
+  };
+}
+
+/* Adjuntos */
+$('btn-adjuntar').onclick = () => $('input-file').click();
+$('input-file').onchange = async () => {
+  const f = $('input-file').files[0];
+  $('input-file').value = '';
+  if (!f || !casoActual) return;
+  const fd = new FormData(); fd.append('file', f);
+  try {
+    const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No se pudo subir el archivo.');
+    cargarMensajes(true);
+  } catch (e) { alert(e.message); }
+};
+
+/* Notas de voz */
+let recorder = null, chunks = [];
+$('btn-audio').onclick = async () => {
+  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => chunks.push(e.data);
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      $('grabando').hidden = true;
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      const fd = new FormData();
+      fd.append('file', blob, 'nota-de-voz.webm');
+      const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+      if (r.ok) cargarMensajes(true); else alert('No se pudo enviar la nota de voz.');
+    };
+    recorder.start();
+    $('grabando').hidden = false;
+  } catch (e) {
+    alert('Para mandar notas de voz hay que permitir el micrófono.');
+  }
+};
+
+/* ---------------- Instalación (PWA) ---------------- */
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredInstall = e;
+  $('btn-instalar').hidden = false;
+});
+$('btn-instalar').onclick = async () => {
+  if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; $('btn-instalar').hidden = true; }
+  else alert('En iPhone: pulsa Compartir y luego "Añadir a pantalla de inicio". En la computadora: busca el icono de instalar en la barra de direcciones del navegador.');
+};
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+/* ---------------- Arranque ---------------- */
+(async () => {
+  if (!token) return;
+  try {
+    const d = await api('/api/me');
+    entrar({ token, user: d.user });
+  } catch (e) { salir(); }
+})();
