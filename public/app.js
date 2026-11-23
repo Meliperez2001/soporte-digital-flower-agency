@@ -74,7 +74,7 @@ function mostrar(id) {
   for (const v of ['vista-auth', 'vista-lista', 'vista-nuevo', 'vista-chat', 'vista-perfil']) $(v).hidden = v !== id;
   /* El panel de stickers y la barra de escribir solo existen dentro del chat:
      al salir de esa vista se cierran siempre. */
-  if (id !== 'vista-chat') $('stickers').hidden = true;
+  if (id !== 'vista-chat') { $('stickers').hidden = true; $('menu-mas').hidden = true; }
   clearInterval(poll); poll = null;
   if (id === 'vista-lista') { cargarLista(); poll = setInterval(cargarLista, 15000); }
   if (id === 'vista-chat') { poll = setInterval(() => cargarMensajes(false), 6000); }
@@ -459,9 +459,15 @@ function autoAltura() {
 }
 $('input-texto').addEventListener('input', autoAltura);
 
+/* Menú «+» del composer: un solo botón a la izquierda del campo de texto
+   abre un panel con Foto, Video, Archivo y Stickers. El micrófono queda
+   fuera del menú, junto al campo. */
+$('btn-mas').onclick = () => { $('menu-mas').hidden = !$('menu-mas').hidden; };
+function cerrarMenuMas() { $('menu-mas').hidden = true; }
+
 /* Stickers */
 $('stickers').innerHTML = STICKERS.map((s) => `<button type="button" data-s="${s}">${s}</button>`).join('');
-$('btn-sticker').onclick = () => { $('stickers').hidden = !$('stickers').hidden; };
+$('menu-stickers').onclick = () => { cerrarMenuMas(); $('stickers').hidden = !$('stickers').hidden; };
 for (const b of $('stickers').querySelectorAll('button')) {
   b.onclick = async () => {
     $('stickers').hidden = true;
@@ -475,8 +481,8 @@ for (const b of $('stickers').querySelectorAll('button')) {
   };
 }
 
-/* Adjuntos: cada tipo con su propio botón y su propio selector —
-   🖼️ fotos, 🎬 videos y 📎 archivos/PDF. */
+/* Adjuntos: se eligen desde el menú «+» y cada opción abre su propio
+   selector — 🖼️ fotos, 🎬 videos y 📎 archivos/PDF. */
 async function subirAdjunto(f) {
   if (!f || !casoActual) return;
   if (bloqueadoPorPreview()) return;
@@ -488,8 +494,8 @@ async function subirAdjunto(f) {
     cargarMensajes(true);
   } catch (e) { alert(e.message); }
 }
-for (const [btnId, inputId] of [['btn-foto', 'input-foto'], ['btn-video', 'input-video'], ['btn-archivo', 'input-archivo']]) {
-  $(btnId).onclick = () => $(inputId).click();
+for (const [menuId, inputId] of [['menu-foto', 'input-foto'], ['menu-video', 'input-video'], ['menu-archivo', 'input-archivo']]) {
+  $(menuId).onclick = () => { cerrarMenuMas(); $('stickers').hidden = true; $(inputId).click(); };
   $(inputId).onchange = () => {
     const f = $(inputId).files[0];
     $(inputId).value = '';
