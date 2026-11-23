@@ -427,15 +427,28 @@ $('form-datos').onsubmit = async (e) => {
     casoActual = d.caso; renderDetalles(d.caso);
   } catch (err) { alert(err.message); }
 };
-$('btn-admin-guardar').onclick = async () => {
+/* Estado y gravedad de la administradora: se guardan SOLOS al cambiar
+   cualquiera de los dos selectores (sin botón de Guardar: en el teléfono
+   el panel quedaba dentro de los detalles plegados y los cambios no se
+   aplicaban si no se pulsaba Guardar). Al guardar se muestra el ✓ y se
+   recarga el caso para que la cabecera y la lista queden al día. */
+let adminGuardando = false;
+async function guardarAdmin() {
+  if (!casoActual || adminGuardando) return;
+  adminGuardando = true;
   try {
     await api(`/api/cases/${casoActual.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ estado: $('admin-estado').value, gravedad: $('admin-gravedad').value }),
     });
-    abrirCaso(casoActual.id);
+    const aviso = $('admin-guardado');
+    if (aviso) { aviso.hidden = false; setTimeout(() => { aviso.hidden = true; }, 2500); }
+    await abrirCaso(casoActual.id);
   } catch (err) { alert(err.message); }
-};
+  adminGuardando = false;
+}
+$('admin-estado').addEventListener('change', guardarAdmin);
+$('admin-gravedad').addEventListener('change', guardarAdmin);
 $('btn-volver').onclick = () => { casoActual = null; cancelarRespuesta(); cerrarMenuMsg(); mostrar('vista-lista'); };
 
 /* Eliminar un caso completo (solo administradoras, con confirmación).
@@ -558,12 +571,33 @@ function extractoLocal(m) {
   return '📄 ' + (m.nombreArchivo || 'Documento');
 }
 
+/* Firma de la última lista de mensajes ya pintada (ids en orden). Sirve
+   para NO repintar el chat cuando la vuelta de sondeo trae exactamente
+   lo mismo: repintar con innerHTML destruye los elementos <audio> y
+   <video> que se están reproduciendo y la nota de voz se cortaba a la
+   mitad (el sondeo corre cada 6 segundos). */
+let firmaMensajes = '';
+
 async function cargarMensajes(bajar) {
   if (!casoActual) return;
   try {
     const { mensajes } = await api(`/api/cases/${casoActual.id}/messages`);
     mensajesPorId = new Map(mensajes.map((m) => [m.id, m]));
     const caja = $('chat-mensajes');
+    const firma = mensajes.map((m) => m.id).join(',');
+    if (firma === firmaMensajes) {
+      /* Nada nuevo: no se toca el DOM, para no interrumpir un audio o
+         video que se esté escuchando. Solo se honra el bajar al final. */
+      if (bajar) caja.scrollTop = caja.scrollHeight;
+      return;
+    }
+    const reproduciendo = [...caja.querySelectorAll('audio, video')].some((el) => !el.paused && !el.ended);
+    if (reproduciendo) {
+      /* Hay cambios, pero alguien está escuchando una nota o viendo un
+         video: repintar ahora lo cortaría. Se deja para la próxima
+         vuelta (la firma aún no se actualiza, así que se reintenta). */
+      return;
+    }
     const estabaAbajo = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
     caja.innerHTML = mensajes.map((m) => {
       /* Cada quien ve SUS mensajes (texto, stickers y adjuntos) siempre de
@@ -594,6 +628,7 @@ async function cargarMensajes(bajar) {
         <button type="button" class="btn-opciones-msg" data-opciones-msg="${m.id}" title="Opciones del mensaje (responder / eliminar)">⋮</button>
       </div>`;
     }).join('');
+    firmaMensajes = firma;
     if (bajar || estabaAbajo) caja.scrollTop = caja.scrollHeight;
   } catch (e) { /* poll silencioso */ }
 }
@@ -615,8 +650,8 @@ $('btn-cancelar-respuesta').onclick = cancelarRespuesta;
 
 /* Como en WhatsApp: con el campo vacío se ven la camarita y el micrófono;
    en cuanto se escribe algo, los dos se reemplazan por el botón de enviar
-   (➤). Mientras se está grabando, el micrófono se queda visible porque
-   es el que detiene y envía la nota de voz. */
+   (➤). Mientras se está grabando, el micrófono se queda visible: la nota
+   se envía sola al soltarlo. */
 function actualizarBtnEnviar() {
   const escribiendo = $('input-texto').value.trim().length > 0;
   const grabandoAhora = typeof recorder !== 'undefined' && Boolean(recorder) && recorder.state === 'recording';
@@ -694,48 +729,108 @@ for (const [menuId, inputId] of [['menu-foto', 'input-foto'], ['menu-video', 'in
   };
 }
 
-/* Notas de voz */
+/* Notas de voz — como en WhatsApp: mantener APRETADO el micrófono para
+   grabar y SOLTAR para que la nota se envíe sola. Funciona con el dedo y
+   con el mouse (pointer events). Un toque accidental muy corto (menos de
+   1 segundo) se descarta en vez de mandar un audio vacío. */
 let recorder = null, chunks = [];
-$('btn-audio').onclick = async () => {
+let grabInicio = 0;         // cuándo arrancó la grabación (tiempo y mínimo de 1 s)
+let grabTimer = null;       // intervalo que pinta el tiempo en el indicador
+let grabIniciando = false;  // getUserMedia en curso, aún no se está grabando
+let soltarAlGrabar = false; // soltó el botón antes de que arrancara la grabación
+
+function fmtTiempoGrab(ms) {
+  const s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+function pintarGrabando() {
+  $('grabando').textContent = '🔴 Grabando ' + fmtTiempoGrab(Date.now() - grabInicio) + ' · Suelta el micrófono para enviar';
+}
+function limpiarIndicadorGrabacion() {
+  if (grabTimer) { clearInterval(grabTimer); grabTimer = null; }
+  $('grabando').hidden = true;
+  $('btn-audio').classList.remove('grabando-on');
+}
+
+async function empezarGrabacion() {
   if (bloqueadoPorPreview()) return;
-  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  if (recorder || grabIniciando) return;
+  grabIniciando = true;
+  soltarAlGrabar = false;
+  let stream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    chunks = [];
-    recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = (e) => chunks.push(e.data);
-    recorder.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      $('grabando').hidden = true;
-      actualizarBtnEnviar();
-      /* El nombre y el tipo salen del formato REAL de la grabación: en el
-         iPhone MediaRecorder produce MP4/AAC y en Chrome WebM. Antes el
-         archivo se mandaba siempre como ".webm", así que una nota grabada
-         en iPhone quedaba guardada con el formato equivocado y no se
-         podía reproducir (en iOS daba error). */
-      const tipoReal = (recorder.mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
-      const EXT_AUDIO = {
-        'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a',
-        'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac',
-      };
-      const blob = new Blob(chunks, { type: tipoReal });
-      const fd = new FormData();
-      fd.append('file', blob, 'nota-de-voz.' + (EXT_AUDIO[tipoReal] || 'webm'));
-      try {
-        const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
-        const d = await r.json().catch(() => ({}));
-        if (r.ok) cargarMensajes(true);
-        else alert(d.error || 'No se pudo enviar la nota de voz.');
-      } catch (err) {
-        alert('No se pudo enviar la nota de voz. Revisa tu conexión e inténtalo de nuevo.');
-      }
-    };
-    recorder.start();
-    $('grabando').hidden = false;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
+    grabIniciando = false;
     alert('Para mandar notas de voz hay que permitir el micrófono.');
+    return;
   }
-};
+  chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    const duracion = Date.now() - grabInicio;
+    const rec = recorder;
+    recorder = null;
+    limpiarIndicadorGrabacion();
+    actualizarBtnEnviar();
+    /* Toque accidental (soltó enseguida): no se manda un audio vacío. */
+    if (duracion < 1000) return;
+    /* El nombre y el tipo salen del formato REAL de la grabación: en el
+       iPhone MediaRecorder produce MP4/AAC y en Chrome WebM. Antes el
+       archivo se mandaba siempre como ".webm", así que una nota grabada
+       en iPhone quedaba guardada con el formato equivocado y no se
+       podía reproducir (en iOS daba error). */
+    const tipoReal = (rec.mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
+    const EXT_AUDIO = {
+      'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a',
+      'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac',
+    };
+    const blob = new Blob(chunks, { type: tipoReal });
+    const fd = new FormData();
+    fd.append('file', blob, 'nota-de-voz.' + (EXT_AUDIO[tipoReal] || 'webm'));
+    try {
+      const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) cargarMensajes(true);
+      else alert(d.error || 'No se pudo enviar la nota de voz.');
+    } catch (err) {
+      alert('No se pudo enviar la nota de voz. Revisa tu conexión e inténtalo de nuevo.');
+    }
+  };
+  grabInicio = Date.now();
+  recorder.start();
+  grabIniciando = false;
+  $('grabando').hidden = false;
+  $('btn-audio').classList.add('grabando-on');
+  pintarGrabando();
+  grabTimer = setInterval(pintarGrabando, 250);
+  actualizarBtnEnviar();
+  /* Si soltó el botón mientras se pedía el permiso del micrófono, la
+     "grabación" dura un instante y el mínimo de 1 s la descarta sola. */
+  if (soltarAlGrabar) detenerGrabacion();
+}
+
+function detenerGrabacion() {
+  if (grabIniciando) { soltarAlGrabar = true; return; }
+  if (recorder && recorder.state === 'recording') recorder.stop();
+}
+
+const btnAudioEl = $('btn-audio');
+btnAudioEl.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  /* Con la captura del puntero, el pointerup llega al botón aunque el
+     dedo o el mouse se haya movido un poco fuera de él. */
+  try { btnAudioEl.setPointerCapture(e.pointerId); } catch (err) { /* sin captura: valen igual los eventos */ }
+  empezarGrabacion();
+});
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+  btnAudioEl.addEventListener(ev, (e) => { e.preventDefault(); detenerGrabacion(); });
+}
+/* Al mantener apretado no deben salir el menú contextual ni el callout
+   de iOS (el CSS del botón ya quita la selección y el callout). */
+btnAudioEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
 /* ------------- Opciones del mensaje: responder y eliminar -------------
    - Teléfono: deslizar el mensaje a la izquierda = responder; mantener

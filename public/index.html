@@ -184,27 +184,33 @@
       </label>
       <button class="btn btn-soft" type="submit">Guardar datos</button>
     </form>
-    <div id="admin-controles" hidden>
-      <h3>Panel de la administradora</h3>
-      <div class="row">
-        <label>Estado
-          <select id="admin-estado"></select>
-        </label>
-        <label>Gravedad
-          <select id="admin-gravedad">
-            <option value="sin_clasificar">Sin clasificar</option>
-            <option value="grave">🚨 Grave</option>
-            <option value="no_grave">No grave</option>
-          </select>
-        </label>
-        <button class="btn btn-soft" id="btn-admin-guardar" type="button">Guardar</button>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn btn-peligro" id="btn-eliminar-caso" type="button">🗑️ Eliminar caso</button>
-        <span class="hint">Borra el caso completo con su chat y sus adjuntos. No se puede deshacer.</span>
-      </div>
-    </div>
   </details>
+
+  <!-- Panel de la administradora FUERA de los detalles plegados: antes
+       vivía dentro de «Detalles y evidencia», cerrado, y había que
+       abrirlo, bajar y acordarse de pulsar Guardar; en el teléfono las
+       marcas de estado/gravedad quedaban escondidas y no se aplicaban.
+       Ahora la barra se ve al entrar al caso y cada cambio se guarda
+       solo, al momento, sin botón. -->
+  <div id="admin-controles" class="admin-bar" hidden>
+    <div class="row">
+      <label>Estado
+        <select id="admin-estado"></select>
+      </label>
+      <label>Gravedad
+        <select id="admin-gravedad">
+          <option value="sin_clasificar">Sin clasificar</option>
+          <option value="grave">🚨 Grave</option>
+          <option value="no_grave">No grave</option>
+        </select>
+      </label>
+      <span id="admin-guardado" class="admin-guardado" hidden>✓ Guardado</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn btn-peligro" id="btn-eliminar-caso" type="button">🗑️ Eliminar caso</button>
+      <span class="hint">Borra el caso completo con su chat y sus adjuntos. No se puede deshacer.</span>
+    </div>
+  </div>
 
   <section id="chat-mensajes" class="chat-mensajes" aria-live="polite"></section>
 
@@ -232,7 +238,7 @@
       <button id="btn-audio" class="btn btn-icon" title="Grabar nota de voz" type="button">🎤</button>
       <button id="btn-enviar" class="btn btn-icon btn-enviar" title="Enviar mensaje" type="button" hidden>➤</button>
     </div>
-    <p id="grabando" class="grabando" hidden>🔴 Grabando… pulsa de nuevo el micrófono para enviar la nota de voz.</p>
+    <p id="grabando" class="grabando" hidden>🔴 Grabando 0:00 · Suelta el micrófono para enviar</p>
     <input type="file" id="input-foto" hidden accept="image/*">
     <input type="file" id="input-video" hidden accept="video/*">
     <input type="file" id="input-archivo" hidden accept="application/pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx,audio/*">

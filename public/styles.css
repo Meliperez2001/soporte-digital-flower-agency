@@ -251,6 +251,16 @@ h3{color:var(--purpura-oscuro)}
   margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;
   box-shadow:none;padding:10px 14px;
 }
+/* Barra de la administradora dentro del caso: visible al entrar (fuera
+   de los detalles plegados), con los selectores de estado y gravedad
+   que se guardan solos al cambiarlos. */
+.admin-bar{
+  flex:none;padding:10px 14px;background:var(--rosa-suave);
+  border-bottom:1px solid var(--borde);
+}
+.admin-bar label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--purpura-oscuro)}
+.admin-bar select{font:inherit;padding:8px;border:1px solid var(--borde);border-radius:10px;background:#fff;color:var(--texto)}
+.admin-guardado{color:var(--purpura);font-weight:700;font-size:14px;padding-bottom:8px}
 .check{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;font-size:14px}
 .check li::before{content:"⬜ ";color:var(--muted)}
 .check li.ok::before{content:"✅ "}
@@ -336,6 +346,15 @@ h3{color:var(--purpura-oscuro)}
 .stickers{display:flex;gap:6px;flex-wrap:wrap;padding:8px 4px}
 .stickers button{font-size:30px;background:var(--rosa-suave);border:1px solid var(--borde);border-radius:12px;padding:6px 10px;cursor:pointer}
 .grabando{color:var(--grave);font-size:13px;margin:8px 2px 0}
+/* Micrófono de mantener apretado (tipo WhatsApp): sin esto, al dejar el
+   dedo encima iOS muestra el callout/menú contextual y el navegador
+   intenta seleccionar o desplazar en vez de grabar. */
+#btn-audio{
+  touch-action:none;-webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+}
+/* Estado visual mientras se graba (botón apretado): se tiñe y crece. */
+#btn-audio.grabando-on{background:var(--rosa);border-color:var(--rosa);transform:scale(1.15)}
 .pie{text-align:center;color:var(--muted);padding:10px 14px;font-size:13px;flex:none}
 /* Dentro de un caso el pie no se muestra: ese alto es para la
    conversación, como en un chat normal (la clase la pone mostrar()). */
