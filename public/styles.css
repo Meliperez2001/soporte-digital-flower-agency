@@ -246,35 +246,39 @@ h3{color:var(--purpura-oscuro)}
 .detalles summary{cursor:pointer;font-weight:700;color:var(--purpura-oscuro);font-size:14px}
 .detalles{padding:14px 18px;flex:none;max-height:45%;overflow-y:auto;overscroll-behavior:contain}
 /* En el chat, «Detalles» es una barra pegada a la cabecera, no una
-   tarjeta flotante con margen y sombra. Cerrada es solo una fila fina. */
+   tarjeta flotante con margen y sombra. Cerrada es solo UNA línea
+   pequeña y discreta, tipo enlace («▸ Detalles y evidencia del caso»),
+   con letra chica: nada de encabezados grandes en esta zona, el chat
+   manda. Todo el contenido —datos del caso y «Administrar caso»— solo
+   se ve cuando Mell toca la fila y se despliega. */
 .vista-chat .detalles{
   margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;
-  box-shadow:none;padding:7px 12px;
+  box-shadow:none;padding:3px 12px;
 }
-/* Barra de la administradora dentro del caso: UNA fila fina y compacta
-   (etiqueta y selector pequeños en línea, eliminar como botón de ícono
-   al final). La versión anterior era un panel fijo de dos filas con
-   selectores y botón grandes y un párrafo explicativo: ocupaba como un
-   tercio de la pantalla del teléfono, no se podía quitar y dejaba el
-   área de mensajes chiquitica. El autoguardado al cambiar los
-   selectores se mantiene. */
-.admin-bar{
-  flex:none;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
-  padding:5px 10px;background:var(--rosa-suave);
-  border-bottom:1px solid var(--borde);
+.vista-chat .detalles summary{
+  font-size:12px;font-weight:600;color:var(--purpura);
+  padding:2px 0;line-height:1.3;
 }
-.admin-campo{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--purpura-oscuro);min-width:0}
-.admin-campo select{
-  font:inherit;font-size:13px;padding:4px 6px;max-width:44vw;
-  border:1px solid var(--borde);border-radius:8px;background:#fff;color:var(--texto);
+.vista-chat .detalles summary::marker{font-size:9px}
+/* «Administrar caso» de la administradora: vive AL FINAL del panel
+   plegable «Detalles y evidencia del caso», no como barra en el chat.
+   Historia: fue panel rosado fijo enorme (v14) y luego «una fila fina»
+   (v15) que en el iPhone de Mell se apiló en vertical —etiqueta sola,
+   selector a todo el ancho, etiqueta sola, selector a todo el ancho y
+   el botón debajo— ocupando todavía más. Dentro del panel plegado no
+   quita ni un píxel al chat: con el panel cerrado, entre la cabecera y
+   los mensajes solo queda la fila de «Detalles». Aquí dentro los
+   selectores sí van grandes y apilados, cómodos de tocar. El
+   autoguardado al cambiar los selectores se mantiene. */
+.admin-seccion{
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--borde);
+  display:flex;flex-direction:column;gap:10px;
 }
-.btn-eliminar-icono{
-  margin-left:auto;flex:none;width:32px;height:32px;border-radius:50%;
-  background:#fdeceb;border:1px solid #f5c6c2;color:var(--grave);
-  font-size:15px;line-height:1;cursor:pointer;padding:0;
-}
-.btn-eliminar-icono:hover{background:#fadbd8}
-.admin-guardado{color:var(--purpura);font-weight:700;font-size:12px;white-space:nowrap}
+.admin-seccion h3{margin:0;font-size:13px;color:var(--purpura-oscuro)}
+.admin-seccion label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--purpura-oscuro)}
+.admin-seccion select{font:inherit;padding:8px;border:1px solid var(--borde);border-radius:10px;background:#fff;color:var(--texto)}
+.admin-seccion .btn-peligro{align-self:flex-start}
+.admin-guardado{color:var(--purpura);font-weight:700;font-size:13px}
 .check{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;font-size:14px}
 .check li::before{content:"⬜ ";color:var(--muted)}
 .check li.ok::before{content:"✅ "}

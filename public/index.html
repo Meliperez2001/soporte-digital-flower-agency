@@ -184,32 +184,35 @@
       </label>
       <button class="btn btn-soft" type="submit">Guardar datos</button>
     </form>
-  </details>
 
-  <!-- Barra de la administradora: UNA sola fila fina y compacta bajo la
-       cabecera (selectores pequeños de Estado y Gravedad en línea y el
-       eliminar como botón de ícono). La versión anterior era un panel
-       rosado enorme y fijo —dos selectores grandes, botón grande y un
-       párrafo explicativo— que se comía un tercio de la pantalla del
-       teléfono y no se podía quitar, dejando el chat chiquitico. La
-       explicación de qué borra el eliminar va en el diálogo de
-       confirmación, no ocupando pantalla. Cada cambio de los selectores
-       se guarda solo, al momento, sin botón Guardar. Solo la ven las
-       administradoras. -->
-  <div id="admin-controles" class="admin-bar" hidden>
-    <label class="admin-campo">Estado
-      <select id="admin-estado"></select>
-    </label>
-    <label class="admin-campo">Gravedad
-      <select id="admin-gravedad">
-        <option value="sin_clasificar">Sin clasificar</option>
-        <option value="grave">🚨 Grave</option>
-        <option value="no_grave">No grave</option>
-      </select>
-    </label>
-    <span id="admin-guardado" class="admin-guardado" hidden>✓ Guardado</span>
-    <button class="btn-eliminar-icono" id="btn-eliminar-caso" type="button" title="Eliminar caso">🗑️</button>
-  </div>
+    <!-- Administrar caso (solo administradoras): Estado, Gravedad y
+         Eliminar viven AQUÍ, al final del panel plegable. Antes eran una
+         barra fija entre la cabecera y los mensajes: en v14 un panel
+         rosado enorme, y en v15 una «fila fina» que en el iPhone de Mell
+         se apiló en vertical (etiqueta sola, selector a todo el ancho,
+         etiqueta sola, selector a todo el ancho y el botón debajo) y se
+         seguía comiendo la pantalla sin poderse quitar. Decisión final:
+         NADA de barra en el chat; con el panel cerrado, entre la
+         cabecera y los mensajes solo queda la fila de «Detalles y
+         evidencia del caso». Cada cambio de los selectores se guarda
+         solo, al momento, sin botón Guardar. -->
+    <div id="admin-controles" class="admin-seccion" hidden>
+      <h3>Administrar caso</h3>
+      <label>Estado
+        <select id="admin-estado"></select>
+      </label>
+      <label>Gravedad
+        <select id="admin-gravedad">
+          <option value="sin_clasificar">Sin clasificar</option>
+          <option value="grave">🚨 Grave</option>
+          <option value="no_grave">No grave</option>
+        </select>
+      </label>
+      <span id="admin-guardado" class="admin-guardado" hidden>✓ Guardado</span>
+      <button class="btn btn-peligro" id="btn-eliminar-caso" type="button">🗑️ Eliminar caso</button>
+      <p class="hint">Borra el caso completo con su chat y sus adjuntos. No se puede deshacer.</p>
+    </div>
+  </details>
 
   <section id="chat-mensajes" class="chat-mensajes" aria-live="polite"></section>
 
