@@ -13,6 +13,8 @@ let yo = null;
 let casoActual = null;
 /* Mensajes del caso abierto, por id (para responder y eliminar). */
 let mensajesPorId = new Map();
+/* Casos de la última lista cargada, por id (para el menú de la lista). */
+let casosPorId = new Map();
 /* Mensaje al que se está respondiendo (cita tipo WhatsApp), o null. */
 let respondiendoA = null;
 let filtroEstado = 'todos';
@@ -88,6 +90,8 @@ function salir() {
   $('btn-salir').hidden = true; $('quien').textContent = '';
   $('btn-perfil').hidden = true; $('mi-avatar').hidden = true;
   $('btn-vista-creadora').hidden = true; $('franja-preview').hidden = true;
+  $('btn-usuarias').hidden = true; $('panel-usuarias').hidden = true;
+  cerrarMenuCaso();
   mostrar('vista-auth');
 }
 
@@ -197,9 +201,13 @@ function aplicarVista() {
   $('btn-nuevo-caso').hidden = rv === 'admin';
   $('admin-resumen').hidden = rv !== 'admin';
   $('filtros-estado').hidden = rv !== 'admin';
+  $('btn-usuarias').hidden = rv !== 'admin';
+  if (rv !== 'admin') { $('panel-usuarias').hidden = true; cerrarMenuCaso(); }
   $('franja-preview').hidden = !vistaPrevia;
-  /* El botón de entrar a la vista previa solo existe para la administradora
-     y solo fuera de la vista previa (dentro, manda el de la franja). */
+  /* El botón de entrar a la vista previa es para TODAS las administradoras
+     (yo.rol === 'admin', incluidas las promovidas desde el panel), no solo
+     para la cuenta principal, y solo fuera de la vista previa (dentro,
+     manda el de la franja). */
   $('btn-vista-creadora').hidden = !yo || yo.rol !== 'admin' || vistaPrevia;
 }
 function textoChatSub(caso) {
@@ -227,6 +235,64 @@ $('btn-volver-admin').onclick = () => {
   refrescarVistaActual();
 };
 
+/* ---------------- Administradoras: promover y degradar usuarias ----------------
+   Solo lo ve y lo usa una administradora; el servidor vuelve a verificar
+   el rol en cada llamada, así que ocultarlo aquí es solo presentación. */
+let usuariasCache = [];
+$('btn-usuarias').onclick = () => {
+  const panel = $('panel-usuarias');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) cargarUsuarias();
+};
+async function cargarUsuarias() {
+  if (!yo || yo.rol !== 'admin') return;
+  try {
+    const { usuarias } = await api('/api/admin/usuarios');
+    usuariasCache = usuarias;
+    $('lista-usuarias').innerHTML = usuarias.map((u) => {
+      let accion;
+      if (u.esPrincipal) {
+        accion = '<span class="chip chip-admin">Administradora principal</span>';
+      } else if (u.rol === 'admin') {
+        accion = `<button type="button" class="btn btn-soft" data-rol="creadora" data-id="${u.id}">Quitar administración</button>`;
+      } else {
+        accion = `<button type="button" class="btn btn-primary" data-rol="admin" data-id="${u.id}">Hacer administradora</button>`;
+      }
+      return `<div class="usuaria-item">
+        ${avatarHTML(u.nombre, u.foto)}
+        <span class="caso-info">
+          <span class="t">${esc(u.nombre)}${u.id === yo.id ? ' (tú)' : ''} ${u.tiktok ? `<span class="muted">${esc(u.tiktok)}</span>` : ''}</span>
+          <span class="s" style="display:block">${esc(u.email)}</span>
+          <span class="chips"><span class="chip ${u.rol === 'admin' ? 'chip-admin' : ''}">${u.rol === 'admin' ? 'Administradora' : 'Creadora'}</span></span>
+        </span>
+        ${accion}
+      </div>`;
+    }).join('');
+    for (const b of $('lista-usuarias').querySelectorAll('button[data-rol]')) {
+      b.onclick = () => cambiarRolUsuaria(Number(b.dataset.id), b.dataset.rol);
+    }
+  } catch (e) { alert(e.message); }
+}
+async function cambiarRolUsuaria(id, rol) {
+  const u = usuariasCache.find((x) => x.id === id);
+  const nombre = u ? u.nombre : 'esta usuaria';
+  const texto = rol === 'admin'
+    ? `¿Hacer administradora a ${nombre}? Va a ver TODOS los casos de la agencia, igual que tú.`
+    : `¿Quitarle la administración a ${nombre}? Volverá a ver solo sus propios casos.`;
+  if (!confirm(texto)) return;
+  try {
+    await api(`/api/admin/usuarios/${id}/rol`, { method: 'PATCH', body: JSON.stringify({ rol }) });
+    if (id === yo.id) {
+      /* Me cambié el rol a mí misma: refresco mi sesión local al momento. */
+      const d = await api('/api/me');
+      yo = d.user;
+      aplicarVista();
+    }
+    cargarUsuarias();
+    cargarLista();
+  } catch (err) { alert(err.message); }
+}
+
 /* ---------------- Lista de casos ---------------- */
 async function cargarLista() {
   if (vistaPrevia) {
@@ -238,6 +304,7 @@ async function cargarLista() {
   }
   try {
     const { casos } = await api('/api/cases');
+    casosPorId = new Map(casos.map((c) => [c.id, c]));
     if (yo.rol === 'admin') {
       const r = await api('/api/admin/resumen');
       $('admin-resumen').innerHTML =
@@ -272,7 +339,12 @@ async function cargarLista() {
       </button>`;
     }).join('');
     for (const b of $('lista-casos').querySelectorAll('.caso-item')) {
-      b.onclick = () => abrirCaso(Number(b.dataset.id));
+      b.onclick = () => {
+        /* Tras una pulsación larga (que abre el menú de eliminar), el
+           navegador dispara también el clic: no debe abrir el caso. */
+        if (Date.now() < suprimirClickCasoHasta) return;
+        abrirCaso(Number(b.dataset.id));
+      };
     }
   } catch (e) { /* la sesión se maneja en api() */ }
 }
@@ -356,17 +428,102 @@ $('btn-admin-guardar').onclick = async () => {
 };
 $('btn-volver').onclick = () => { casoActual = null; cancelarRespuesta(); cerrarMenuMsg(); mostrar('vista-lista'); };
 
-/* Eliminar el caso completo (solo administradora, con confirmación) */
-$('btn-eliminar-caso').onclick = async () => {
-  if (!casoActual || yo.rol !== 'admin') return;
-  if (!confirm(`¿Eliminar el caso "${casoActual.titulo}"? Se borra el caso completo con su chat y sus adjuntos. Esto no se puede deshacer.`)) return;
+/* Eliminar un caso completo (solo administradoras, con confirmación).
+   Lo usan tanto el botón de dentro del caso como el menú de la lista. */
+async function eliminarCaso(id, titulo) {
+  if (bloqueadoPorPreview()) return;
+  if (!confirm(`¿Eliminar el caso "${titulo || ''}"? Se borra el caso completo con su chat y sus adjuntos. Esto no se puede deshacer.`)) return;
   try {
-    await api(`/api/cases/${casoActual.id}`, { method: 'DELETE' });
-    casoActual = null;
+    await api(`/api/cases/${id}`, { method: 'DELETE' });
+    if (casoActual && casoActual.id === id) casoActual = null;
     cancelarRespuesta();
+    cerrarMenuMsg();
     mostrar('vista-lista');
   } catch (err) { alert(err.message); }
+}
+$('btn-eliminar-caso').onclick = () => {
+  if (!casoActual || yo.rol !== 'admin') return;
+  eliminarCaso(casoActual.id, casoActual.titulo);
 };
+
+/* ------------- Eliminar caso desde la LISTA (solo administradoras) -------------
+   - Teléfono: mantener presionado un caso abre el menú "Eliminar caso".
+   - Computadora: clic derecho sobre el caso abre el mismo menú.
+   Para las creadoras no hay menú: eliminar casos es solo de administradoras
+   (y el servidor también lo exige con su propio permiso). */
+const menuCaso = document.createElement('div');
+menuCaso.className = 'msg-menu';
+menuCaso.hidden = true;
+menuCaso.innerHTML = `<button type="button" data-acc="eliminar-caso">🗑️ Eliminar caso</button>`;
+document.body.appendChild(menuCaso);
+let menuCasoId = null;
+let menuCasoAbiertoEn = 0;
+let suprimirClickCasoHasta = 0;
+function cerrarMenuCaso() {
+  menuCaso.hidden = true;
+  menuCasoId = null;
+}
+function puedeModerarCasos() { return Boolean(yo) && rolVista() === 'admin'; }
+function abrirMenuCaso(id, x, y) {
+  if (!puedeModerarCasos()) return;
+  menuCasoId = id;
+  menuCasoAbiertoEn = Date.now();
+  menuCaso.hidden = false;
+  const ancho = 210, alto = 64;
+  menuCaso.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
+  menuCaso.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
+}
+menuCaso.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-acc="eliminar-caso"]');
+  if (!b || menuCasoId == null) return;
+  const id = menuCasoId;
+  const c = casosPorId.get(id);
+  cerrarMenuCaso();
+  eliminarCaso(id, c ? c.titulo : '');
+});
+document.addEventListener('click', (e) => {
+  if (menuCaso.hidden || menuCaso.contains(e.target)) return;
+  if (Date.now() - menuCasoAbiertoEn < 400) return; // clic fantasma de la pulsación larga
+  cerrarMenuCaso();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenuCaso(); });
+
+const listaCasosEl = $('lista-casos');
+/* Clic derecho (computadora) sobre un caso: menú de eliminar */
+listaCasosEl.addEventListener('contextmenu', (e) => {
+  const item = e.target.closest('.caso-item');
+  if (!item || !puedeModerarCasos()) return;
+  e.preventDefault();
+  abrirMenuCaso(Number(item.dataset.id), e.clientX, e.clientY);
+});
+/* Pulsación larga (teléfono) sobre un caso: menú de eliminar */
+let toqueCaso = null;
+let timerCaso = null;
+listaCasosEl.addEventListener('touchstart', (e) => {
+  if (!puedeModerarCasos()) return;
+  const item = e.target.closest('.caso-item');
+  if (!item || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  toqueCaso = { item, x: t.clientX, y: t.clientY };
+  clearTimeout(timerCaso);
+  timerCaso = setTimeout(() => {
+    if (!toqueCaso) return;
+    suprimirClickCasoHasta = Date.now() + 600;
+    abrirMenuCaso(Number(item.dataset.id), toqueCaso.x, toqueCaso.y);
+    toqueCaso = null;
+  }, 550);
+}, { passive: true });
+listaCasosEl.addEventListener('touchmove', (e) => {
+  if (!toqueCaso) return;
+  const t = e.touches[0];
+  if (Math.abs(t.clientX - toqueCaso.x) > 10 || Math.abs(t.clientY - toqueCaso.y) > 10) {
+    clearTimeout(timerCaso);
+    toqueCaso = null;
+  }
+}, { passive: true });
+function finToqueCaso() { clearTimeout(timerCaso); toqueCaso = null; }
+listaCasosEl.addEventListener('touchend', finToqueCaso, { passive: true });
+listaCasosEl.addEventListener('touchcancel', finToqueCaso, { passive: true });
 
 /* Extracto de un mensaje para citarlo al responder (espejo del servidor). */
 function extractoLocal(m) {
@@ -388,15 +545,11 @@ async function cargarMensajes(bajar) {
     const estabaAbajo = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
     caja.innerHTML = mensajes.map((m) => {
       /* Cada quien ve SUS mensajes (texto, stickers y adjuntos) siempre de
-         su lado: la clase propio/ajeno se aplica a TODOS los tipos. */
+         su lado: la clase propio/ajeno se aplica a TODOS los tipos.
+         Los mensajes eliminados ya no llegan aquí: el servidor los borra
+         por completo y no los sirve a nadie. */
       const mio = m.autorId === yo.id;
       const lado = mio ? 'propio' : 'ajeno';
-      if (m.eliminado) {
-        return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}" data-id="${m.id}">
-          ${avatarHTML(m.autorNombre, m.autorFoto, 'avatar-msg')}
-          <div class="msg ${lado} eliminado">🚫 Mensaje eliminado</div>
-        </div>`;
-      }
       const clase = m.tipo === 'sticker' ? `msg sticker ${lado}` : `msg ${lado}`;
       let cuerpo = '';
       if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
@@ -571,7 +724,7 @@ menuMsg.addEventListener('click', async (e) => {
   if (acc === 'responder') { activarRespuesta(m); return; }
   if (acc === 'eliminar') {
     if (bloqueadoPorPreview()) return;
-    if (!confirm('¿Eliminar este mensaje?')) return;
+    if (!confirm('¿Eliminar este mensaje para todos? Desaparece por completo del chat, también para la otra persona.')) return;
     try {
       await api(`/api/cases/${casoActual.id}/messages/${m.id}`, { method: 'DELETE' });
       if (respondiendoA && respondiendoA.id === m.id) cancelarRespuesta();
@@ -596,17 +749,24 @@ cajaChat.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   abrirMenuMsg(mensajesPorId.get(Number(fila.dataset.id)), e.clientX, e.clientY);
 });
-/* Táctil: deslizar a la izquierda = responder; mantener presionado = menú */
+/* Táctil: deslizar el mensaje en horizontal = responder (como WhatsApp);
+   mantener presionado = menú de opciones.
+   La dirección del gesto se decide al principio y se BLOQUEA: si el dedo
+   se mueve sobre todo en horizontal, el gesto es de deslizar y la deriva
+   vertical posterior ya NO lo cancela; si se mueve sobre todo en vertical,
+   es el scroll de la conversación y no se toca nada. Antes, cualquier
+   deriva vertical de más de 12px a mitad del gesto lo mataba (toque=null)
+   y por eso el mensaje se veía deslizar pero nunca quedaba citado. */
 let toque = null;
 let timerLargo = null;
 cajaChat.addEventListener('touchstart', (e) => {
   const fila = e.target.closest('.msg-row');
   if (!fila || e.touches.length !== 1) return;
   const t = e.touches[0];
-  toque = { fila, x: t.clientX, y: t.clientY, dx: 0, deslizo: false };
+  toque = { fila, x: t.clientX, y: t.clientY, dx: 0, dir: null };
   clearTimeout(timerLargo);
   timerLargo = setTimeout(() => {
-    if (toque && !toque.deslizo) {
+    if (toque && !toque.dir) {
       abrirMenuMsg(mensajesPorId.get(Number(fila.dataset.id)), toque.x, toque.y);
       toque = null;
     }
@@ -617,28 +777,48 @@ cajaChat.addEventListener('touchmove', (e) => {
   const t = e.touches[0];
   const dx = t.clientX - toque.x;
   const dy = t.clientY - toque.y;
-  if (Math.abs(dy) > 12) { clearTimeout(timerLargo); toque.deslizo = true; toque.fila.style.transform = ''; toque = null; return; }
-  if (dx < -8) {
-    toque.deslizo = true;
-    clearTimeout(timerLargo);
+  if (!toque.dir) {
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      toque.dir = 'h';
+      clearTimeout(timerLargo);
+      toque.fila.classList.add('deslizando');
+    } else if (Math.abs(dy) > 10) {
+      /* Es scroll vertical: se suelta el gesto sin tocar el mensaje. */
+      clearTimeout(timerLargo);
+      toque.fila.style.transform = '';
+      toque = null;
+      return;
+    } else {
+      return; // todavía no se sabe la dirección del gesto
+    }
+  }
+  if (toque.dir === 'h') {
+    /* Sin preventDefault la conversación haría scroll a mitad del gesto
+       y el navegador cancelaría el toque sin responder. */
+    e.preventDefault();
     toque.dx = dx;
     /* El mensaje acompaña el dedo hasta un tope, como en WhatsApp */
-    toque.fila.style.transform = `translateX(${Math.max(dx, -72)}px)`;
+    toque.fila.style.transform = `translateX(${Math.max(-76, Math.min(76, dx))}px)`;
   }
-}, { passive: true });
+}, { passive: false });
 cajaChat.addEventListener('touchend', () => {
   clearTimeout(timerLargo);
   if (!toque) return;
-  const { fila, dx, deslizo } = toque;
+  const { fila, dx, dir } = toque;
+  fila.classList.remove('deslizando');
   fila.style.transform = '';
   toque = null;
-  if (deslizo && dx <= -56) {
+  if (dir === 'h' && Math.abs(dx) >= 48) {
     activarRespuesta(mensajesPorId.get(Number(fila.dataset.id)));
   }
 }, { passive: true });
 cajaChat.addEventListener('touchcancel', () => {
   clearTimeout(timerLargo);
-  if (toque) { toque.fila.style.transform = ''; toque = null; }
+  if (toque) {
+    toque.fila.classList.remove('deslizando');
+    toque.fila.style.transform = '';
+    toque = null;
+  }
 }, { passive: true });
 
 /* ---------------- Instalación (PWA) ---------------- */

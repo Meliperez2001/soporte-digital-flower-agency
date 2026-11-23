@@ -84,18 +84,20 @@ function getCasoVisible(req, res) {
   return caso;
 }
 function casoResumen(caso) {
-  const msgs = db.messages.filter((m) => m.casoId === caso.id);
+  /* Los mensajes borrados no cuentan ni se anuncian: para la lista es
+     como si nunca hubieran existido. */
+  const msgs = db.messages.filter((m) => m.casoId === caso.id && !m.eliminado);
   const ultimo = msgs[msgs.length - 1] || null;
   return {
     ...caso,
     creadoraFoto: fotoDe(caso.creadoraId),
     totalMensajes: msgs.length,
-    sinLeerAdmin: msgs.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length,
-    sinLeerCreadora: msgs.filter((m) => m.autor !== 'creadora' && !m.leidoCreadora && !m.eliminado).length,
+    sinLeerAdmin: msgs.filter((m) => m.autor === 'creadora' && !m.leidoAdmin).length,
+    sinLeerCreadora: msgs.filter((m) => m.autor !== 'creadora' && !m.leidoCreadora).length,
     ultimoMensaje: ultimo
       ? {
           tipo: ultimo.tipo,
-          texto: ultimo.eliminado ? 'Mensaje eliminado' : ultimo.texto ? ultimo.texto.slice(0, 80) : '',
+          texto: ultimo.texto ? ultimo.texto.slice(0, 80) : '',
           createdAt: ultimo.createdAt,
         }
       : null,
@@ -120,8 +122,14 @@ function evidenciaDe(caso) {
 /* ------------------------------------------------------------------ */
 /* Cuenta de administradora (se crea sola en el primer arranque)       */
 /* ------------------------------------------------------------------ */
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+/** La cuenta administradora principal es la del correo de ADMIN_EMAIL:
+    no se puede degradar ni cambiar su rol desde la app. */
+function esAdminPrincipal(u) {
+  return Boolean(ADMIN_EMAIL) && Boolean(u) && u.email === ADMIN_EMAIL;
+}
 (function seedAdmin() {
-  const email = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  const email = ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD || '';
   if (!email || !password) {
     console.warn('⚠️  ADMIN_EMAIL / ADMIN_PASSWORD no definidos: no se creó la cuenta de administradora.');
@@ -347,8 +355,10 @@ app.patch('/api/cases/:id/datos', auth, (req, res) => {
 app.get('/api/cases/:id/messages', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
   if (!caso) return;
+  /* Los mensajes eliminados (con el borrado viejo quedaban marcados) ya
+     no se sirven a nadie: en el chat no queda ni el aviso. */
   const msgs = db.messages
-    .filter((m) => m.casoId === caso.id)
+    .filter((m) => m.casoId === caso.id && !m.eliminado)
     .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   // Marcar como leídos los mensajes de la otra parte
   let cambio = false;
@@ -414,24 +424,27 @@ app.post('/api/cases/:id/messages', auth, (req, res) => {
   guardarMensaje(req, res, { tipo: 'texto', texto: String(texto).trim().slice(0, 4000) });
 });
 
-/** Eliminar un mensaje: lo puede borrar quien lo escribió o la
-    administradora. Queda una marca "Mensaje eliminado" en el chat. */
+/** Eliminar un mensaje PARA TODOS: lo puede borrar quien lo escribió o
+    la administradora. El mensaje desaparece por completo del caso y deja
+    de servirse a ambas partes (sin burbuja de "mensaje eliminado"), y se
+    quita también la cita de los mensajes que lo respondían, para que no
+    quede visible ni el extracto de lo borrado. */
 app.delete('/api/cases/:id/messages/:mid', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
   if (!caso) return;
-  const msg = db.messages.find((m) => m.id === Number(req.params.mid) && m.casoId === caso.id);
-  if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado.' });
+  const idx = db.messages.findIndex((m) => m.id === Number(req.params.mid) && m.casoId === caso.id);
+  if (idx === -1) return res.status(404).json({ error: 'Mensaje no encontrado.' });
+  const msg = db.messages[idx];
   if (req.user.rol !== 'admin' && msg.autorId !== req.user.id) {
     return res.status(403).json({ error: 'Solo puedes eliminar tus propios mensajes.' });
   }
   if (msg.archivo && msg.archivo.startsWith('/uploads/')) {
     fs.unlink(path.join(UPLOADS_DIR, path.basename(msg.archivo)), () => {});
   }
-  msg.eliminado = true;
-  msg.texto = '';
-  msg.archivo = null;
-  msg.nombreArchivo = null;
-  msg.mime = null;
+  db.messages.splice(idx, 1);
+  for (const m of db.messages) {
+    if (m.casoId === caso.id && m.respuesta && m.respuesta.id === msg.id) delete m.respuesta;
+  }
   save();
   res.json({ ok: true });
 });
@@ -502,8 +515,37 @@ app.get('/api/admin/resumen', auth, soloAdmin, (req, res) => {
   for (const c of db.cases) {
     porEstado[c.estado] = (porEstado[c.estado] || 0) + 1;
   }
-  sinLeer = db.messages.filter((m) => m.autor === 'creadora' && !m.leidoAdmin).length;
+  sinLeer = db.messages.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length;
   res.json({ porEstado, sinLeer, totalCasos: db.cases.length, labels: ESTADO_LABELS });
+});
+
+/* ------------------------------------------------------------------ */
+/* Panel de administradora: usuarias y roles                           */
+/* Una administradora puede promover a otra usuaria a administradora   */
+/* (verá todos los casos, igual que la principal) o quitarle el rol.   */
+/* La cuenta principal (la del correo ADMIN_EMAIL) no se puede         */
+/* degradar ni cambiar desde la app. Los permisos se verifican aquí,   */
+/* en el servidor: una creadora ni siquiera puede leer la lista.       */
+/* ------------------------------------------------------------------ */
+app.get('/api/admin/usuarios', auth, soloAdmin, (req, res) => {
+  const usuarias = db.users
+    .slice()
+    .sort((a, b) => (a.rol === b.rol ? a.nombre.localeCompare(b.nombre) : a.rol === 'admin' ? -1 : 1))
+    .map((u) => ({ ...publicUser(u), esPrincipal: esAdminPrincipal(u), createdAt: u.createdAt }));
+  res.json({ usuarias });
+});
+
+app.patch('/api/admin/usuarios/:id/rol', auth, soloAdmin, (req, res) => {
+  const { rol } = req.body || {};
+  if (rol !== 'admin' && rol !== 'creadora') return res.status(400).json({ error: 'Rol no válido.' });
+  const u = db.users.find((x) => x.id === Number(req.params.id));
+  if (!u) return res.status(404).json({ error: 'Usuaria no encontrada.' });
+  if (esAdminPrincipal(u)) {
+    return res.status(403).json({ error: 'La administradora principal no se puede cambiar desde la app.' });
+  }
+  u.rol = rol;
+  save();
+  res.json({ user: { ...publicUser(u), esPrincipal: esAdminPrincipal(u) } });
 });
 
 /* ------------------------------------------------------------------ */

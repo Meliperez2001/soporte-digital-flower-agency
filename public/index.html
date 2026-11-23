@@ -77,9 +77,15 @@
   <section class="panel-head">
     <h2 id="lista-titulo">Mis casos</h2>
     <button id="btn-nuevo-caso" class="btn btn-primary">+ Abrir un caso</button>
+    <button id="btn-usuarias" class="btn btn-soft" hidden>👥 Administradoras</button>
   </section>
   <div id="admin-resumen" class="resumen" hidden></div>
   <div id="filtros-estado" class="filtros" hidden></div>
+  <section id="panel-usuarias" class="card" hidden>
+    <h3>Administradoras</h3>
+    <p class="muted small">Las administradoras ven <strong>todos los casos</strong> de la agencia, igual que tú, y pueden cambiar estados, eliminar casos y mensajes. Si haces administradora a una creadora, verá el panel completo la próxima vez que entre a la app (o al volver a abrirla).</p>
+    <div id="lista-usuarias" class="lista-usuarias"></div>
+  </section>
   <div id="lista-casos" class="lista-casos"></div>
   <p id="lista-vacia" class="muted" hidden>Todavía no hay casos aquí.</p>
 </main>
