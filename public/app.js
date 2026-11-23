@@ -1,6 +1,17 @@
 'use strict';
 /* Soporte Digital Flower Agency — lógica del cliente */
 const $ = (id) => document.getElementById(id);
+/* Versión de la app (constante ÚNICA: subirla en cada despliegue, junto
+   con el ?v=NN del index y el CACHE del sw.js). Se muestra como sello
+   «Soporte DFA · vNN» en el pie de la lista de casos y en «Mi perfil»:
+   si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
+   la versión vieja o no aparece) y no hay que adivinar si un problema
+   visual es caché o un bug real. */
+const APP_VERSION = 'v18';
+for (const idSello of ['version-pie', 'version-perfil']) {
+  const sello = $(idSello);
+  if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
+}
 const ESTADOS = ['nuevo', 'esperando_evidencia', 'evidencia_completa', 'listos', 'resuelto', 'cerrado'];
 const ESTADO_LABELS = {
   nuevo: 'Nuevo', esperando_evidencia: 'Esperando evidencia', evidencia_completa: 'Evidencia completa',

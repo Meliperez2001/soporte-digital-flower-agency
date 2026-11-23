@@ -244,12 +244,48 @@ h3{color:var(--purpura-oscuro)}
    enorme, los mensajes iban en una caja con borde y el composer en otra
    tarjeta con sombra, y entre todo eso el área de mensajes quedaba como
    un cuadradito pequeño en el medio de la pantalla. */
-.vista-chat{display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0}
+/* v18: la vista de caso es una CAPA FIJA a pantalla completa, fuera del
+   flujo del body. Historia del bug: en el iPhone de Mell el composer
+   seguía «flotando» con una franja blanca debajo aun con la v17 en vivo
+   (captura 23/11 18:46, caso de Gisselle Rojas). Toda la carcasa colgaba
+   de body{position:fixed; inset:0}, y el body es un elemento especial:
+   si WebKit lo ancla a un viewport de layout más corto que la pantalla
+   visible (pasa en la app instalada), TODA la columna termina antes del
+   borde inferior y debajo se ve el fondo del html: la franja blanca. La
+   otra hipótesis era que su teléfono aún servía la carcasa anterior
+   (en v15 su captura renderizó el layout de v14: mezcla de versiones);
+   para zanjarla, la app lleva desde v18 un sello de versión visible
+   (pie de la lista y «Mi perfil») leído de APP_VERSION en app.js.
+   Como capa fija propia con inset:0, la vista ya no depende del body:
+   cabecera arriba, mensajes creciendo en el medio y el composer, último
+   hijo de la columna, pegado al borde inferior real. El fondo de la
+   capa es el mismo degradado del shell sobre el que se compone el área
+   de mensajes (rgba(255,255,255,.65)): si quedara un residuo bajo el
+   composer se vería ese fondo de chat, no blanco. width/margin de la
+   .vista genérica se neutralizan: con left/right en 0 y un width fijo,
+   en pantallas anchas el right se ignoraría y la capa no cubriría todo.
+   La capa (z-index 30) cubre la topbar y la franja de vista previa
+   mientras se está en un caso, como en cualquier chat a pantalla
+   completa; el visor de fotos (100) y el menú de mensaje (50) quedan
+   por encima. */
+.vista-chat{
+  position:fixed;inset:0;z-index:30;width:auto;margin:0;
+  display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0;
+  background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
+}
 .chat-head{
   display:flex;gap:8px;align-items:center;flex:none;
-  background:#fff;border-bottom:1px solid var(--borde);padding:6px 8px;
+  /* La cabecera del chat es ahora la barra superior de la capa: cubre
+     también la zona de la barra de estado con el degradado púrpura de
+     la topbar (la barra de estado es translúcida, con iconos blancos) y
+     su contenido queda bajo el reloj / Dynamic Island (safe-area). */
+  background:linear-gradient(90deg,var(--purpura) 0%,var(--purpura-claro) 100%);
+  color:#fff;border-bottom:none;
+  padding:calc(6px + env(safe-area-inset-top)) 8px 6px;
 }
-.chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff;padding:5px 10px;font-size:18px;line-height:1.2}
+.chat-head .btn-ghost{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.12);padding:5px 10px;font-size:18px;line-height:1.2}
+.chat-head .chat-titulo h2{color:#fff}
+.chat-head .chat-titulo p{color:rgba(255,255,255,.85)}
 .chat-head .avatar{width:32px;height:32px}
 .chat-titulo{min-width:0;flex:1}
 .chat-titulo h2{margin:0;font-size:16px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -412,6 +448,13 @@ h3{color:var(--purpura-oscuro)}
 /* Estado visual mientras se graba (botón apretado): se tiñe y crece. */
 #btn-audio.grabando-on{background:var(--rosa);border-color:var(--rosa);transform:scale(1.15)}
 .pie{text-align:center;color:var(--muted);padding:10px 14px;font-size:13px;flex:none}
+/* Sello de versión visible (v18): texto pequeño «Soporte DFA · vNN» en
+   el pie de la lista de casos y en «Mi perfil». Lo escribe app.js desde
+   la constante única APP_VERSION: si el teléfono sirve una carcasa
+   vieja, el sello muestra la versión VIEJA (o no aparece, si es
+   anterior a v18) y se sabe al momento qué está corriendo ese aparato
+   sin adivinar si es caché o un bug de layout. */
+.version-sello{display:block;margin-top:3px;font-size:11px;opacity:.75;letter-spacing:.02em}
 /* Dentro de un caso el pie no se muestra: ese alto es para la
    conversación, como en un chat normal (la clase la pone mostrar()). */
 body.en-chat .pie{display:none}

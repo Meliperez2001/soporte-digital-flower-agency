@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Soporte DFA">
-<link rel="stylesheet" href="/styles.css?v=17">
+<link rel="stylesheet" href="/styles.css?v=18">
 </head>
 <body>
 <header class="topbar">
@@ -112,6 +112,8 @@
       <p class="error" id="perfil-error"></p>
       <p class="hint" id="perfil-ok"></p>
     </form>
+    <!-- Sello de versión (lo rellena app.js desde APP_VERSION). -->
+    <p class="hint version-sello" id="version-perfil"></p>
   </section>
 </main>
 
@@ -256,8 +258,12 @@
 
 <footer class="pie">
   <small>🌸 Soporte Digital Flower Agency · Tu caso es privado: nadie ve el chat de nadie.</small>
+  <!-- Sello de versión: lo rellena app.js con la constante APP_VERSION.
+       Si un teléfono sirve una carcasa vieja, aquí se ve la versión
+       vieja (o nada, si es anterior a v18): diagnóstico sin adivinar. -->
+  <small id="version-pie" class="version-sello"></small>
 </footer>
 
-<script src="/app.js?v=17"></script>
+<script src="/app.js?v=18"></script>
 </body>
 </html>
