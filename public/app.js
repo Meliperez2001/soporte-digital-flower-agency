@@ -38,6 +38,24 @@ async function api(path, opts = {}) {
 function urlAdjunto(m) {
   return m.archivo + '?token=' + encodeURIComponent(token);
 }
+function urlFoto(foto) {
+  return foto ? foto + '?token=' + encodeURIComponent(token) : '';
+}
+function inicialesDe(nombre) {
+  return (nombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+}
+/* Rellena un elemento .avatar con la foto de perfil o, si no hay, las iniciales. */
+function pintarAvatar(el, nombre, foto) {
+  if (!el) return;
+  if (foto) el.innerHTML = `<img src="${urlFoto(foto)}" alt="">`;
+  else el.textContent = inicialesDe(nombre);
+}
+/* HTML de un avatar (foto o iniciales) para listas y mensajes. */
+function avatarHTML(nombre, foto, clase) {
+  return foto
+    ? `<span class="avatar ${clase || ''}"><img src="${urlFoto(foto)}" alt=""></span>`
+    : `<span class="avatar ${clase || ''}">${esc(inicialesDe(nombre))}</span>`;
+}
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -49,7 +67,7 @@ function hora(iso) {
 
 /* ---------------- Vistas ---------------- */
 function mostrar(id) {
-  for (const v of ['vista-auth', 'vista-lista', 'vista-nuevo', 'vista-chat']) $(v).hidden = v !== id;
+  for (const v of ['vista-auth', 'vista-lista', 'vista-nuevo', 'vista-chat', 'vista-perfil']) $(v).hidden = v !== id;
   /* El panel de stickers y la barra de escribir solo existen dentro del chat:
      al salir de esa vista se cierran siempre. */
   if (id !== 'vista-chat') $('stickers').hidden = true;
@@ -64,6 +82,7 @@ function salir() {
   token = ''; yo = null; casoActual = null; vistaPrevia = false;
   localStorage.removeItem('sdfa_token');
   $('btn-salir').hidden = true; $('quien').textContent = '';
+  $('btn-perfil').hidden = true; $('mi-avatar').hidden = true;
   $('btn-vista-creadora').hidden = true; $('franja-preview').hidden = true;
   mostrar('vista-auth');
 }
@@ -84,6 +103,20 @@ $('form-login').onsubmit = async (e) => {
     entrar(d);
   } catch (err) { $('login-error').textContent = err.message; }
 };
+/* Vista previa de la foto elegida en el registro */
+$('reg-foto').onchange = () => {
+  const f = $('reg-foto').files[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  $('reg-foto-preview').innerHTML = `<img src="${url}" alt="">`;
+};
+async function subirFoto(file) {
+  const fd = new FormData(); fd.append('foto', file);
+  const r = await fetch('/api/profile/foto', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'No se pudo subir la foto.');
+  return d.user;
+}
 $('form-registro').onsubmit = async (e) => {
   e.preventDefault(); $('reg-error').textContent = '';
   try {
@@ -91,6 +124,13 @@ $('form-registro').onsubmit = async (e) => {
       method: 'POST',
       body: JSON.stringify({ nombre: $('reg-nombre').value, email: $('reg-email').value, tiktok: $('reg-tiktok').value, password: $('reg-pass').value }),
     });
+    token = d.token; // la foto se sube ya autenticada, antes de entrar
+    const fotoFile = $('reg-foto').files[0];
+    if (fotoFile) {
+      try { d.user = await subirFoto(fotoFile); } catch (err) { /* la cuenta ya se creó: la foto se puede poner luego en Mi perfil */ }
+    }
+    e.target.reset();
+    $('reg-foto-preview').textContent = '🌸';
     entrar(d);
   } catch (err) { $('reg-error').textContent = err.message; }
 };
@@ -98,11 +138,53 @@ function entrar(d) {
   token = d.token; yo = d.user; vistaPrevia = false;
   localStorage.setItem('sdfa_token', token);
   $('btn-salir').hidden = false;
+  $('btn-perfil').hidden = false;
   $('quien').textContent = yo.rol === 'admin' ? `🌸 ${yo.nombre} (administradora)` : `Hola, ${yo.nombre}`;
+  $('mi-avatar').hidden = false;
+  pintarAvatar($('mi-avatar'), yo.nombre, yo.foto);
   aplicarVista();
   mostrar('vista-lista');
 }
 $('btn-salir').onclick = salir;
+
+/* ---------------- Mi perfil ---------------- */
+$('btn-perfil').onclick = () => {
+  if (!yo) return;
+  $('perfil-nombre').value = yo.nombre || '';
+  $('perfil-tiktok').value = yo.tiktok || '';
+  $('perfil-error').textContent = ''; $('perfil-ok').textContent = '';
+  pintarAvatar($('perfil-foto-preview'), yo.nombre, yo.foto);
+  mostrar('vista-perfil');
+};
+$('btn-volver-perfil').onclick = () => mostrar('vista-lista');
+$('perfil-foto').onchange = async () => {
+  const f = $('perfil-foto').files[0];
+  $('perfil-foto').value = '';
+  if (!f || !yo) return;
+  $('perfil-error').textContent = ''; $('perfil-ok').textContent = '';
+  try {
+    yo = await subirFoto(f);
+    pintarAvatar($('perfil-foto-preview'), yo.nombre, yo.foto);
+    pintarAvatar($('mi-avatar'), yo.nombre, yo.foto);
+    $('perfil-ok').textContent = '✔ Foto actualizada.';
+    refrescarVistaActual();
+  } catch (err) { $('perfil-error').textContent = err.message; }
+};
+$('form-perfil').onsubmit = async (e) => {
+  e.preventDefault();
+  $('perfil-error').textContent = ''; $('perfil-ok').textContent = '';
+  try {
+    const d = await api('/api/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ nombre: $('perfil-nombre').value, tiktok: $('perfil-tiktok').value }),
+    });
+    yo = d.user;
+    $('quien').textContent = yo.rol === 'admin' ? `🌸 ${yo.nombre} (administradora)` : `Hola, ${yo.nombre}`;
+    pintarAvatar($('mi-avatar'), yo.nombre, yo.foto);
+    pintarAvatar($('perfil-foto-preview'), yo.nombre, yo.foto);
+    $('perfil-ok').textContent = '✔ Perfil guardado.';
+  } catch (err) { $('perfil-error').textContent = err.message; }
+};
 
 /* ---------------- Vista previa como creadora (solo administradora) ---------------- */
 function aplicarVista() {
@@ -167,13 +249,12 @@ async function cargarLista() {
     const visibles = filtroEstado === 'todos' ? casos : casos.filter((c) => c.estado === filtroEstado);
     $('lista-vacia').hidden = visibles.length > 0;
     $('lista-casos').innerHTML = visibles.map((c) => {
-      const iniciales = (c.creadoraNombre || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
       const sinLeer = yo.rol === 'admin' ? c.sinLeerAdmin : c.sinLeerCreadora;
       const ult = c.ultimoMensaje
         ? (c.ultimoMensaje.tipo === 'texto' ? esc(c.ultimoMensaje.texto) : c.ultimoMensaje.tipo === 'sticker' ? '🌸 Sticker' : '📎 Adjunto')
         : 'Sin mensajes';
       return `<button class="caso-item" data-id="${c.id}">
-        <span class="avatar">${esc(iniciales)}</span>
+        ${avatarHTML(c.creadoraNombre, c.creadoraFoto)}
         <span class="caso-info">
           <span class="t">${esc(c.creadoraNombre)} ${c.creadoraTiktok ? `<span class="muted">${esc(c.creadoraTiktok)}</span>` : ''}</span>
           <span class="s" style="display:block">${esc(c.titulo)} · ${ult}</span>
@@ -218,6 +299,7 @@ async function abrirCaso(id) {
     casoActual = caso;
     $('chat-titulo').textContent = caso.titulo;
     $('chat-sub').textContent = textoChatSub(caso);
+    pintarAvatar($('chat-avatar'), caso.creadoraNombre, caso.creadoraFoto);
     renderDetalles(caso);
     mostrar('vista-chat');
     await cargarMensajes(true);
@@ -284,10 +366,13 @@ async function cargarMensajes(bajar) {
       else if ((m.mime || '').startsWith('image/')) cuerpo = `<a href="${urlAdjunto(m)}" target="_blank"><img src="${urlAdjunto(m)}" alt="foto"></a>`;
       else if ((m.mime || '').startsWith('video/')) cuerpo = `<video controls src="${urlAdjunto(m)}"></video>`;
       else cuerpo = `<a class="doc" href="${urlAdjunto(m)}" target="_blank">📄 ${esc(m.nombreArchivo || 'Documento')}</a>`;
-      return `<div class="${clase}">
-        ${m.tipo !== 'sticker' ? `<div class="autor">${esc(m.autorNombre || '')}</div>` : ''}
-        ${cuerpo}
-        <div class="hora">${hora(m.createdAt)}</div>
+      return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}">
+        ${avatarHTML(m.autorNombre, m.autorFoto, 'avatar-msg')}
+        <div class="${clase}">
+          ${m.tipo !== 'sticker' ? `<div class="autor">${esc(m.autorNombre || '')}</div>` : ''}
+          ${cuerpo}
+          <div class="hora">${hora(m.createdAt)}</div>
+        </div>
       </div>`;
     }).join('');
     if (bajar || estabaAbajo) caja.scrollTop = caja.scrollHeight;

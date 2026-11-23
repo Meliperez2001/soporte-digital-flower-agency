@@ -12,7 +12,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const { db, save, nextId, UPLOADS_DIR } = require('./lib/store');
+const { db, save, nextId, UPLOADS_DIR, AVATARS_DIR } = require('./lib/store');
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secreto-de-desarrollo-cambialo';
@@ -40,7 +40,12 @@ const TIPOS_CASO = ['apelar', 'suspension', 'puntos', 'fondos', 'funciones', 'ot
 /* Utilidades                                                          */
 /* ------------------------------------------------------------------ */
 function publicUser(u) {
-  return { id: u.id, nombre: u.nombre, email: u.email, tiktok: u.tiktok || '', rol: u.rol };
+  return { id: u.id, nombre: u.nombre, email: u.email, tiktok: u.tiktok || '', rol: u.rol, foto: u.foto || null };
+}
+/** Foto de perfil de una usuaria (o null si usa el avatar de iniciales). */
+function fotoDe(userId) {
+  const u = db.users.find((x) => x.id === userId);
+  return u ? u.foto || null : null;
 }
 function findUserByEmail(email) {
   return db.users.find((u) => u.email === String(email || '').toLowerCase().trim());
@@ -83,6 +88,7 @@ function casoResumen(caso) {
   const ultimo = msgs[msgs.length - 1] || null;
   return {
     ...caso,
+    creadoraFoto: fotoDe(caso.creadoraId),
     totalMensajes: msgs.length,
     sinLeerAdmin: msgs.filter((m) => m.autor === 'creadora' && !m.leidoAdmin).length,
     sinLeerCreadora: msgs.filter((m) => m.autor !== 'creadora' && !m.leidoCreadora).length,
@@ -123,6 +129,7 @@ function evidenciaDe(caso) {
       nombre: process.env.ADMIN_NAME || 'Mell',
       email,
       tiktok: '',
+      foto: null,
       rol: 'admin',
       passwordHash: bcrypt.hashSync(password, 10),
       createdAt: new Date().toISOString(),
@@ -147,6 +154,7 @@ app.post('/api/register', async (req, res) => {
     nombre: String(nombre).trim(),
     email: limpio,
     tiktok: String(tiktok || '').trim(),
+    foto: null,
     rol: 'creadora',
     passwordHash: bcrypt.hashSync(String(password), 10),
     createdAt: new Date().toISOString(),
@@ -166,6 +174,65 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }));
+
+/* ------------------------------------------------------------------ */
+/* Mi perfil: nombre y foto                                            */
+/* ------------------------------------------------------------------ */
+const MAX_FOTO_MB = 5;
+const FOTO_EXT_POR_MIME = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+const uploadFoto = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, AVATARS_DIR),
+    filename: (req, file, cb) => {
+      const ext = FOTO_EXT_POR_MIME[file.mimetype] || '.jpg';
+      cb(null, `avatar-${req.user.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: MAX_FOTO_MB * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (FOTO_EXT_POR_MIME[file.mimetype]) return cb(null, true);
+    cb(new Error('La foto tiene que ser una imagen (JPG, PNG, WebP o GIF).'));
+  },
+});
+
+/** Cambiar el nombre visible (y el @ de TikTok) del perfil propio. */
+app.patch('/api/profile', auth, (req, res) => {
+  const { nombre, tiktok } = req.body || {};
+  if (nombre !== undefined) {
+    const limpio = String(nombre).trim().slice(0, 80);
+    if (!limpio) return res.status(400).json({ error: 'El nombre no puede quedar vacío.' });
+    req.user.nombre = limpio;
+    // El nombre nuevo se refleja también en sus casos abiertos
+    for (const c of db.cases) if (c.creadoraId === req.user.id) c.creadoraNombre = limpio;
+  }
+  if (tiktok !== undefined) {
+    req.user.tiktok = String(tiktok).trim().slice(0, 60);
+    for (const c of db.cases) if (c.creadoraId === req.user.id) c.creadoraTiktok = req.user.tiktok;
+  }
+  save();
+  res.json({ user: publicUser(req.user) });
+});
+
+/** Subir o cambiar la foto de perfil (solo imágenes, máx. 5 MB). */
+app.post('/api/profile/foto', auth, (req, res) => {
+  uploadFoto.single('foto')(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? `La foto es muy grande: el máximo es ${MAX_FOTO_MB} MB.`
+        : err.message || 'No se pudo subir la foto.';
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No llegó ninguna foto.' });
+    const anterior = req.user.foto;
+    req.user.foto = '/uploads/avatars/' + req.file.filename;
+    save();
+    // Borrar la foto anterior para no acumular archivos viejos
+    if (anterior && anterior.startsWith('/uploads/avatars/')) {
+      fs.unlink(path.join(AVATARS_DIR, path.basename(anterior)), () => {});
+    }
+    res.json({ user: publicUser(req.user) });
+  });
+});
 
 /* ------------------------------------------------------------------ */
 /* Casos                                                               */
@@ -223,7 +290,7 @@ app.get('/api/cases', auth, (req, res) => {
 app.get('/api/cases/:id', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
   if (!caso) return;
-  res.json({ caso: { ...caso, evidencia: evidenciaDe(caso) } });
+  res.json({ caso: { ...caso, creadoraFoto: fotoDe(caso.creadoraId), evidencia: evidenciaDe(caso) } });
 });
 
 app.patch('/api/cases/:id', auth, soloAdmin, (req, res) => {
@@ -269,7 +336,8 @@ app.get('/api/cases/:id/messages', auth, (req, res) => {
     if (req.user.rol !== 'admin' && m.autor !== 'creadora' && !m.leidoCreadora) { m.leidoCreadora = true; cambio = true; }
   }
   if (cambio) save();
-  res.json({ mensajes: msgs });
+  // Cada mensaje lleva la foto de perfil actual de quien lo escribió
+  res.json({ mensajes: msgs.map((m) => ({ ...m, autorFoto: fotoDe(m.autorId) })) });
 });
 
 function guardarMensaje(req, res, datos) {
@@ -334,6 +402,18 @@ function authFlexible(req, res, next) {
   }
   auth(req, res, next);
 }
+/* Las fotos de perfil se ven entre la creadora y la administradora de un
+   caso, así que basta con estar autenticada para verlas (no son públicas:
+   sin sesión no se sirven). */
+app.get('/uploads/avatars/:name', authFlexible, (req, res) => {
+  const name = path.basename(req.params.name);
+  const duena = db.users.find((u) => u.foto === '/uploads/avatars/' + name);
+  if (!duena) return res.status(404).end();
+  const file = path.join(AVATARS_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.sendFile(file);
+});
+
 app.get('/uploads/:name', authFlexible, (req, res) => {
   const name = path.basename(req.params.name);
   const msg = db.messages.find((m) => m.archivo === '/uploads/' + name);

@@ -27,7 +27,9 @@
   <div class="top-actions">
     <button id="btn-instalar" class="btn btn-soft" hidden>Instalar la aplicación</button>
     <button id="btn-vista-creadora" class="btn btn-soft" hidden>👀 Ver como creadora</button>
+    <span id="mi-avatar" class="avatar avatar-top" hidden></span>
     <span id="quien" class="quien"></span>
+    <button id="btn-perfil" class="btn btn-ghost" hidden>Mi perfil</button>
     <button id="btn-salir" class="btn btn-ghost" hidden>Salir</button>
   </div>
 </header>
@@ -56,6 +58,14 @@
       <label>Correo electrónico <input type="email" id="reg-email" required autocomplete="email"></label>
       <label>Tu @ de TikTok <input type="text" id="reg-tiktok" placeholder="@tuusuario"></label>
       <label>Contraseña <input type="password" id="reg-pass" required minlength="6" autocomplete="new-password"></label>
+      <div class="foto-campo">
+        <span id="reg-foto-preview" class="avatar avatar-grande">🌸</span>
+        <div>
+          <label class="btn btn-soft" for="reg-foto">📷 Poner mi foto de perfil</label>
+          <input type="file" id="reg-foto" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+          <p class="hint">Opcional: tu foto se ve en tus casos y en el chat. Si no pones ninguna, salen tus iniciales.</p>
+        </div>
+      </div>
       <button class="btn btn-primary" type="submit">Crear mi cuenta</button>
       <p class="error" id="reg-error"></p>
       <p class="muted small">No compartas tu contraseña con nadie. La agencia nunca te la va a pedir por chat.</p>
@@ -72,6 +82,31 @@
   <div id="filtros-estado" class="filtros" hidden></div>
   <div id="lista-casos" class="lista-casos"></div>
   <p id="lista-vacia" class="muted" hidden>Todavía no hay casos aquí.</p>
+</main>
+
+<main id="vista-perfil" class="vista" hidden>
+  <section class="card auth-card">
+    <h2>Mi perfil</h2>
+    <p class="muted">Tu nombre y tu foto son los que se ven en tus casos y en los mensajes del chat.</p>
+    <div class="foto-campo">
+      <span id="perfil-foto-preview" class="avatar avatar-grande">🌸</span>
+      <div>
+        <label class="btn btn-soft" for="perfil-foto">📷 Cambiar mi foto</label>
+        <input type="file" id="perfil-foto" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        <p class="hint">Imagen JPG o PNG, máximo 5 MB. El cambio se guarda al momento.</p>
+      </div>
+    </div>
+    <form id="form-perfil" class="form">
+      <label>Mi nombre <input type="text" id="perfil-nombre" required autocomplete="name"></label>
+      <label>Mi @ de TikTok <input type="text" id="perfil-tiktok" placeholder="@tuusuario"></label>
+      <div class="row">
+        <button class="btn btn-primary" type="submit">Guardar</button>
+        <button class="btn btn-ghost" type="button" id="btn-volver-perfil">Volver</button>
+      </div>
+      <p class="error" id="perfil-error"></p>
+      <p class="hint" id="perfil-ok"></p>
+    </form>
+  </section>
 </main>
 
 <main id="vista-nuevo" class="vista" hidden>
@@ -121,6 +156,7 @@
 <main id="vista-chat" class="vista vista-chat" hidden>
   <section class="chat-head">
     <button id="btn-volver" class="btn btn-ghost">← Volver</button>
+    <span id="chat-avatar" class="avatar"></span>
     <div class="chat-titulo">
       <h2 id="chat-titulo"></h2>
       <p id="chat-sub" class="muted small"></p>

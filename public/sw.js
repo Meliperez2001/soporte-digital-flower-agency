@@ -1,7 +1,7 @@
 /* Service worker de Soporte Digital Flower Agency.
    Cachea la carcasa de la app (HTML/CSS/JS/iconos) para que se abra rápido
    y se pueda instalar. Los datos (/api y /uploads) siempre van a la red. */
-const CACHE = 'soporte-dfa-v4';
+const CACHE = 'soporte-dfa-v5';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
