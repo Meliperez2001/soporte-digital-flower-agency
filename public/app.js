@@ -41,6 +41,9 @@ function hora(iso) {
 /* ---------------- Vistas ---------------- */
 function mostrar(id) {
   for (const v of ['vista-auth', 'vista-lista', 'vista-nuevo', 'vista-chat']) $(v).hidden = v !== id;
+  /* El panel de stickers y la barra de escribir solo existen dentro del chat:
+     al salir de esa vista se cierran siempre. */
+  if (id !== 'vista-chat') $('stickers').hidden = true;
   clearInterval(poll); poll = null;
   if (id === 'vista-lista') { cargarLista(); poll = setInterval(cargarLista, 15000); }
   if (id === 'vista-chat') { poll = setInterval(() => cargarMensajes(false), 6000); }
