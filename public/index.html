@@ -214,7 +214,6 @@
       <button type="button" id="menu-foto"><span class="menu-ico">🖼️</span><span class="menu-txt">Foto</span></button>
       <button type="button" id="menu-video"><span class="menu-ico">🎬</span><span class="menu-txt">Video</span></button>
       <button type="button" id="menu-archivo"><span class="menu-ico">📎</span><span class="menu-txt">Archivo</span></button>
-      <button type="button" id="menu-stickers"><span class="menu-ico">😊</span><span class="menu-txt">Stickers</span></button>
     </div>
     <div id="reply-bar" class="reply-bar" hidden>
       <div class="reply-bar-texto">
@@ -224,10 +223,14 @@
       <button id="btn-cancelar-respuesta" class="btn btn-ghost" type="button" title="Cancelar respuesta">✕</button>
     </div>
     <div class="input-row">
-      <button id="btn-mas" class="btn btn-icon btn-mas" title="Adjuntar foto, video, archivo o stickers" type="button" aria-haspopup="true">+</button>
-      <textarea id="input-texto" rows="1" placeholder="Escribe tu mensaje y pulsa Enter para enviar…"></textarea>
+      <button id="btn-mas" class="btn btn-icon btn-mas" title="Adjuntar foto, video o archivo" type="button" aria-haspopup="true">+</button>
+      <div class="barra-escribir">
+        <textarea id="input-texto" rows="1" placeholder="Escribe tu mensaje…"></textarea>
+        <button id="btn-sticker" class="btn-sticker-in" title="Stickers" type="button">😊</button>
+      </div>
+      <button id="btn-camara" class="btn btn-icon" title="Enviar una foto" type="button">📷</button>
       <button id="btn-audio" class="btn btn-icon" title="Grabar nota de voz" type="button">🎤</button>
-      <button id="btn-enviar" class="btn btn-primary" type="button">Enviar</button>
+      <button id="btn-enviar" class="btn btn-icon btn-enviar" title="Enviar mensaje" type="button" hidden>➤</button>
     </div>
     <p id="grabando" class="grabando" hidden>🔴 Grabando… pulsa de nuevo el micrófono para enviar la nota de voz.</p>
     <input type="file" id="input-foto" hidden accept="image/*">

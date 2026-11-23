@@ -450,11 +450,32 @@ app.delete('/api/cases/:id/messages/:mid', auth, (req, res) => {
 });
 
 /* Adjuntos: fotos, videos, documentos, PDF y notas de voz */
+/* Extensión según el formato REAL del archivo. Es clave para las notas de
+   voz del iPhone: iOS/Safari graba en MP4/AAC, pero el cliente guardaba
+   todo como ".webm"; el archivo quedaba con contenido MP4 y extensión y
+   tipo WebM, y el iPhone no lo podía reproducir (daba error al abrirlo).
+   En Chrome/Escritorio la grabación sí es WebM y se guarda como .webm. */
+const EXT_POR_MIME = {
+  'audio/webm': '.webm', 'audio/mp4': '.m4a', 'audio/m4a': '.m4a', 'audio/x-m4a': '.m4a',
+  'audio/ogg': '.ogg', 'audio/mpeg': '.mp3', 'audio/wav': '.wav', 'audio/x-wav': '.wav', 'audio/aac': '.aac',
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif',
+  'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov',
+  'application/pdf': '.pdf',
+};
+/** Tipo sin parámetros: 'audio/webm;codecs=opus' → 'audio/webm'. */
+function mimeLimpio(m) {
+  return String(m || '').split(';')[0].trim().toLowerCase();
+}
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOADS_DIR),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname || '').slice(0, 10);
+      const mime = mimeLimpio(file.mimetype);
+      let ext = path.extname(file.originalname || '').slice(0, 10).toLowerCase();
+      /* En los audios manda el formato real, no el nombre que traiga el
+         archivo; y si no hay extensión usable, se deriva del tipo. */
+      if (mime.startsWith('audio/') && EXT_POR_MIME[mime]) ext = EXT_POR_MIME[mime];
+      else if (!ext && EXT_POR_MIME[mime]) ext = EXT_POR_MIME[mime];
       cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`);
     },
   }),
@@ -463,13 +484,14 @@ const upload = multer({
 
 app.post('/api/cases/:id/upload', auth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No llegó ningún archivo.' });
-  const esAudio = (req.file.mimetype || '').startsWith('audio/');
+  const mime = mimeLimpio(req.file.mimetype);
+  const esAudio = mime.startsWith('audio/');
   guardarMensaje(req, res, {
     tipo: esAudio ? 'audio' : 'archivo',
     texto: '',
     archivo: '/uploads/' + req.file.filename,
     nombreArchivo: req.file.originalname,
-    mime: req.file.mimetype,
+    mime,
   });
 });
 
@@ -502,6 +524,11 @@ app.get('/uploads/:name', authFlexible, (req, res) => {
   if (!caso || !puedeVerCaso(req.user, caso)) return res.status(403).end();
   const file = path.join(UPLOADS_DIR, name);
   if (!fs.existsSync(file)) return res.status(404).end();
+  /* Las notas de voz se sirven con su tipo real (audio/mp4 en iPhone,
+     audio/webm en Chrome), no con el que adivina la extensión: un .m4a
+     servido como video/webm no suena en Safari. sendFile respeta el
+     Content-Type si ya viene fijado. */
+  if (msg.tipo === 'audio' && msg.mime) res.type(mimeLimpio(msg.mime));
   res.sendFile(file);
 });
 

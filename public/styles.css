@@ -151,7 +151,31 @@ h3{color:var(--purpura-oscuro)}
 .foto-campo .hint{margin:6px 0 0}
 .foto-campo label.btn{display:inline-block;cursor:pointer;font-weight:700;font-size:14px}
 /* Fila de mensaje: avatar + burbuja */
-.msg-row{display:flex;gap:8px;align-items:flex-end;width:100%;transition:transform .18s ease;touch-action:pan-y}
+.msg-row{position:relative;display:flex;gap:8px;align-items:flex-end;width:100%;transition:transform .18s ease;touch-action:pan-y}
+/* Botón visible ⋮ de opciones del mensaje (responder / eliminar): en la
+   computadora aparece al pasar el mouse sobre el mensaje; en pantallas
+   táctiles se ve siempre, tenue. Es el equivalente con mouse de la
+   pulsación larga y del clic derecho. */
+.btn-opciones-msg{
+  position:absolute;top:0;z-index:2;
+  width:26px;height:26px;border-radius:50%;flex:none;
+  background:var(--tarjeta);border:1px solid var(--borde);box-shadow:var(--sombra);
+  color:var(--muted);font-size:15px;line-height:1;cursor:pointer;padding:0;
+  opacity:0;transition:opacity .15s ease;
+}
+.msg-row.mio .btn-opciones-msg{left:0}
+.msg-row.ajeno .btn-opciones-msg{right:0}
+.msg-row:hover .btn-opciones-msg,.msg-row:focus-within .btn-opciones-msg{opacity:1}
+@media (hover:none){
+  .btn-opciones-msg{opacity:.75}
+}
+/* Botón visible ⋮ de opciones del caso en la lista (solo administradoras):
+   abre el menú de eliminar caso sin clic derecho ni pulsación larga. */
+.btn-opciones{
+  flex:none;align-self:center;width:34px;height:34px;border-radius:50%;
+  background:none;border:none;color:var(--muted);font-size:19px;line-height:1;cursor:pointer;padding:0;
+}
+.btn-opciones:hover{background:var(--rosa-suave);color:var(--purpura-oscuro)}
 /* Mientras el dedo arrastra el mensaje, sin transición: sigue al dedo. */
 .msg-row.deslizando{transition:none}
 .msg-row.mio{flex-direction:row-reverse}
@@ -239,18 +263,36 @@ h3{color:var(--purpura-oscuro)}
   padding:10px 10px calc(10px + env(safe-area-inset-bottom));
 }
 .input-row{display:flex;gap:8px;align-items:flex-end}
-.input-row textarea{
-  flex:1;min-width:0;resize:none;padding:11px 12px;border:1px solid var(--borde);border-radius:14px;font:inherit;max-height:120px;
+/* Barra de escribir estilo WhatsApp: una píldora redondeada ANCHA que
+   contiene el campo de texto y, dentro, en su esquina derecha, el botón
+   pequeño de stickers. Fuera de la barra van el «+», la cámara y el
+   micrófono/enviar. */
+.barra-escribir{
+  flex:1;min-width:0;display:flex;align-items:flex-end;gap:2px;
+  background:#fff;border:1px solid var(--borde);border-radius:24px;
+  padding:5px 6px 5px 14px;box-shadow:0 2px 8px rgba(117,29,149,.06);
 }
-/* Enviar nunca se corta: tamaño fijo dentro de la fila del composer. */
-#btn-enviar{flex:none;white-space:nowrap}
-/* Botón «+» del composer: abre el menú de adjuntos y stickers. */
+.barra-escribir textarea{
+  flex:1;min-width:0;resize:none;border:none;background:transparent;
+  padding:8px 0;font:inherit;max-height:120px;outline:none;color:var(--texto);
+}
+/* Iconito de stickers dentro de la barra, en la esquina del campo. */
+.btn-sticker-in{
+  flex:none;background:none;border:none;cursor:pointer;
+  font-size:21px;line-height:1;padding:6px 4px;border-radius:50%;
+}
+.btn-sticker-in:hover{background:var(--rosa-suave)}
+/* Botón de enviar: círculo púrpura con la flecha, como en WhatsApp.
+   Sustituye a la píldora "Enviar"; aparece solo cuando hay texto. */
+.btn-enviar{background:var(--purpura);color:#fff;border-color:var(--purpura);font-size:16px}
+.btn-enviar:hover{background:var(--purpura-oscuro)}
+/* Botón «+» del composer: abre el menú de adjuntos (Foto, Video, Archivo). */
 .btn-mas{font-size:26px;font-weight:400;line-height:1;color:var(--purpura-oscuro)}
 /* Panel del menú «+» (tipo WhatsApp): se abre encima de la barra de
    escribir, con una cuadrícula de botones grandes — ícono en círculo y
    nombre debajo — en los colores de la app (púrpura/rosado). */
 .menu-mas{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
   padding:14px 10px;margin-bottom:8px;
   background:var(--rosa-suave);border:1px solid var(--borde);border-radius:14px;
 }
@@ -265,8 +307,7 @@ h3{color:var(--purpura-oscuro)}
   background:linear-gradient(135deg,var(--purpura),var(--purpura-claro));
   box-shadow:var(--sombra);
 }
-.menu-mas #menu-video .menu-ico,
-.menu-mas #menu-stickers .menu-ico{background:var(--rosa)}
+.menu-mas #menu-video .menu-ico{background:var(--rosa)}
 .menu-mas .menu-txt{font-size:13px;line-height:1.1}
 .menu-mas button:hover .menu-ico{filter:brightness(1.08)}
 .stickers{display:flex;gap:6px;flex-wrap:wrap;padding:8px 4px}
@@ -287,5 +328,4 @@ h3{color:var(--purpura-oscuro)}
   .avatar-top{width:28px;height:28px}
   .msg{max-width:88%}
   .quien{display:none}
-  #btn-enviar{padding:10px 14px}
 }

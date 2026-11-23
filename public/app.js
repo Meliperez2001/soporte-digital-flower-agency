@@ -324,7 +324,7 @@ async function cargarLista() {
       const ult = c.ultimoMensaje
         ? (c.ultimoMensaje.tipo === 'texto' ? esc(c.ultimoMensaje.texto) : c.ultimoMensaje.tipo === 'sticker' ? '🌸 Sticker' : '📎 Adjunto')
         : 'Sin mensajes';
-      return `<button class="caso-item" data-id="${c.id}">
+      return `<div class="caso-item" role="button" tabindex="0" data-id="${c.id}">
         ${avatarHTML(c.creadoraNombre, c.creadoraFoto)}
         <span class="caso-info">
           <span class="t">${esc(c.creadoraNombre)} ${c.creadoraTiktok ? `<span class="muted">${esc(c.creadoraTiktok)}</span>` : ''}</span>
@@ -336,14 +336,21 @@ async function cargarLista() {
         </span>
         ${sinLeer ? `<span class="badge">${sinLeer}</span>` : ''}
         <span class="muted small">${c.ultimoMensaje ? hora(c.ultimoMensaje.createdAt) : ''}</span>
-      </button>`;
+        ${rolVista() === 'admin' ? `<button type="button" class="btn-opciones" data-opciones="${c.id}" title="Opciones del caso (eliminar)">⋮</button>` : ''}
+      </div>`;
     }).join('');
     for (const b of $('lista-casos').querySelectorAll('.caso-item')) {
-      b.onclick = () => {
+      b.onclick = (e) => {
+        /* El botón ⋮ tiene su propio manejo (abre el menú de eliminar):
+           su clic no debe abrir el caso. */
+        if (e.target.closest('[data-opciones]')) return;
         /* Tras una pulsación larga (que abre el menú de eliminar), el
            navegador dispara también el clic: no debe abrir el caso. */
         if (Date.now() < suprimirClickCasoHasta) return;
         abrirCaso(Number(b.dataset.id));
+      };
+      b.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirCaso(Number(b.dataset.id)); }
       };
     }
   } catch (e) { /* la sesión se maneja en api() */ }
@@ -449,6 +456,8 @@ $('btn-eliminar-caso').onclick = () => {
 /* ------------- Eliminar caso desde la LISTA (solo administradoras) -------------
    - Teléfono: mantener presionado un caso abre el menú "Eliminar caso".
    - Computadora: clic derecho sobre el caso abre el mismo menú.
+   - Siempre (admin): el botón visible ⋮ de cada caso abre ese menú, sin
+     depender de gestos que con el mouse no existen.
    Para las creadoras no hay menú: eliminar casos es solo de administradoras
    (y el servidor también lo exige con su propio permiso). */
 const menuCaso = document.createElement('div');
@@ -489,6 +498,16 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenuCaso(); });
 
 const listaCasosEl = $('lista-casos');
+/* Botón visible ⋮ en cada caso (computadora y teléfono): abre el mismo
+   menú de eliminar, sin tener que adivinar el clic derecho ni la
+   pulsación larga. */
+listaCasosEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-opciones]');
+  if (!b) return;
+  e.stopPropagation();
+  const r = b.getBoundingClientRect();
+  abrirMenuCaso(Number(b.dataset.opciones), r.left, r.bottom + 4);
+});
 /* Clic derecho (computadora) sobre un caso: menú de eliminar */
 listaCasosEl.addEventListener('contextmenu', (e) => {
   const item = e.target.closest('.caso-item');
@@ -569,6 +588,7 @@ async function cargarMensajes(bajar) {
           ${cuerpo}
           <div class="hora">${hora(m.createdAt)}</div>
         </div>
+        <button type="button" class="btn-opciones-msg" data-opciones-msg="${m.id}" title="Opciones del mensaje (responder / eliminar)">⋮</button>
       </div>`;
     }).join('');
     if (bajar || estabaAbajo) caja.scrollTop = caja.scrollHeight;
@@ -590,11 +610,23 @@ function cancelarRespuesta() {
 }
 $('btn-cancelar-respuesta').onclick = cancelarRespuesta;
 
+/* Como en WhatsApp: con el campo vacío se ven la camarita y el micrófono;
+   en cuanto se escribe algo, los dos se reemplazan por el botón de enviar
+   (➤). Mientras se está grabando, el micrófono se queda visible porque
+   es el que detiene y envía la nota de voz. */
+function actualizarBtnEnviar() {
+  const escribiendo = $('input-texto').value.trim().length > 0;
+  const grabandoAhora = typeof recorder !== 'undefined' && Boolean(recorder) && recorder.state === 'recording';
+  $('btn-enviar').hidden = !escribiendo;
+  $('btn-audio').hidden = escribiendo && !grabandoAhora;
+  $('btn-camara').hidden = escribiendo;
+}
+
 async function enviarTexto() {
   if (bloqueadoPorPreview()) return;
   const t = $('input-texto').value.trim();
   if (!t || !casoActual) return;
-  $('input-texto').value = ''; autoAltura();
+  $('input-texto').value = ''; autoAltura(); actualizarBtnEnviar();
   const citaId = respondiendoA ? respondiendoA.id : undefined;
   cancelarRespuesta();
   try {
@@ -610,17 +642,20 @@ function autoAltura() {
   const ta = $('input-texto');
   ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
 }
-$('input-texto').addEventListener('input', autoAltura);
+$('input-texto').addEventListener('input', () => { autoAltura(); actualizarBtnEnviar(); });
 
-/* Menú «+» del composer: un solo botón a la izquierda del campo de texto
-   abre un panel con Foto, Video, Archivo y Stickers. El micrófono queda
-   fuera del menú, junto al campo. */
-$('btn-mas').onclick = () => { $('menu-mas').hidden = !$('menu-mas').hidden; };
+/* Menú «+» del composer (estilo WhatsApp): un solo botón a la izquierda
+   de la barra abre un panel solo con Foto, Video y Archivo. Los stickers
+   ya no van en ese panel: se abren con el iconito dentro de la barra de
+   escribir. La cámara, al lado de la barra, abre las fotos directamente. */
+$('btn-mas').onclick = () => { $('stickers').hidden = true; $('menu-mas').hidden = !$('menu-mas').hidden; };
 function cerrarMenuMas() { $('menu-mas').hidden = true; }
+$('btn-camara').onclick = () => { cerrarMenuMas(); $('stickers').hidden = true; $('input-foto').click(); };
 
-/* Stickers */
+/* Stickers: botón pequeño dentro de la barra de escribir, en la esquina
+   derecha del campo, como en WhatsApp. */
 $('stickers').innerHTML = STICKERS.map((s) => `<button type="button" data-s="${s}">${s}</button>`).join('');
-$('menu-stickers').onclick = () => { cerrarMenuMas(); $('stickers').hidden = !$('stickers').hidden; };
+$('btn-sticker').onclick = () => { cerrarMenuMas(); $('stickers').hidden = !$('stickers').hidden; };
 for (const b of $('stickers').querySelectorAll('button')) {
   b.onclick = async () => {
     $('stickers').hidden = true;
@@ -669,11 +704,28 @@ $('btn-audio').onclick = async () => {
     recorder.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
       $('grabando').hidden = true;
-      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      actualizarBtnEnviar();
+      /* El nombre y el tipo salen del formato REAL de la grabación: en el
+         iPhone MediaRecorder produce MP4/AAC y en Chrome WebM. Antes el
+         archivo se mandaba siempre como ".webm", así que una nota grabada
+         en iPhone quedaba guardada con el formato equivocado y no se
+         podía reproducir (en iOS daba error). */
+      const tipoReal = (recorder.mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
+      const EXT_AUDIO = {
+        'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a',
+        'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac',
+      };
+      const blob = new Blob(chunks, { type: tipoReal });
       const fd = new FormData();
-      fd.append('file', blob, 'nota-de-voz.webm');
-      const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
-      if (r.ok) cargarMensajes(true); else alert('No se pudo enviar la nota de voz.');
+      fd.append('file', blob, 'nota-de-voz.' + (EXT_AUDIO[tipoReal] || 'webm'));
+      try {
+        const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) cargarMensajes(true);
+        else alert(d.error || 'No se pudo enviar la nota de voz.');
+      } catch (err) {
+        alert('No se pudo enviar la nota de voz. Revisa tu conexión e inténtalo de nuevo.');
+      }
     };
     recorder.start();
     $('grabando').hidden = false;
@@ -686,7 +738,8 @@ $('btn-audio').onclick = async () => {
    - Teléfono: deslizar el mensaje a la izquierda = responder; mantener
      presionado = menú de opciones.
    - Computadora: clic derecho sobre el mensaje = menú (Responder /
-     Eliminar). */
+     Eliminar), y además cada mensaje lleva un botón visible ⋮ que abre
+     el mismo menú con el mouse, sin gestos ni adivinanzas. */
 const menuMsg = document.createElement('div');
 menuMsg.className = 'msg-menu';
 menuMsg.hidden = true;
@@ -742,6 +795,15 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenuMsg(); });
 
 const cajaChat = $('chat-mensajes');
+/* Botón visible ⋮ de cada mensaje: abre el menú de opciones con un clic
+   normal del mouse (o del dedo), igual que el clic derecho. */
+cajaChat.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-opciones-msg]');
+  if (!b) return;
+  e.stopPropagation();
+  const r = b.getBoundingClientRect();
+  abrirMenuMsg(mensajesPorId.get(Number(b.dataset.opcionesMsg)), r.left, r.bottom + 4);
+});
 /* Clic derecho (computadora) sobre un mensaje: menú de opciones */
 cajaChat.addEventListener('contextmenu', (e) => {
   const fila = e.target.closest('.msg-row');
