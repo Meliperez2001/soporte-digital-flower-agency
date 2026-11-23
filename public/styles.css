@@ -49,6 +49,18 @@ body{
 .brand small{opacity:.85;font-size:12px}
 .top-actions{display:flex;align-items:center;gap:8px}
 .quien{font-size:13px;opacity:.95}
+/* Franja de vista previa "Ver como creadora": parte del shell (no se
+   desplaza) y solo existe mientras la administradora está previsualizando. */
+.franja-preview{
+  flex:none;z-index:9;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:var(--rosa-suave);
+  border-bottom:2px dashed var(--purpura-claro);
+  color:var(--purpura-oscuro);font-size:14px;
+  box-shadow:var(--sombra);
+}
+.franja-preview .btn{flex:none}
 .vista{
   width:min(920px,100%);margin:0 auto;padding:18px 14px 30px;
   /* Único contenedor con scroll del shell (fuera de la vista de chat). */
@@ -175,4 +187,5 @@ h3{color:var(--purpura-oscuro)}
   .brand small{display:none}
   .msg{max-width:88%}
   .quien{display:none}
+  #btn-vista-creadora{padding:8px 12px;font-size:13px}
 }

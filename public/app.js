@@ -14,6 +14,15 @@ let casoActual = null;
 let filtroEstado = 'todos';
 let poll = null;
 let deferredInstall = null;
+/* Vista previa "Ver como creadora": solo visual y solo para la administradora.
+   Nunca cambia el rol real (yo.rol) ni los permisos en el servidor. */
+let vistaPrevia = false;
+function rolVista() { return vistaPrevia ? 'creadora' : (yo ? yo.rol : null); }
+function bloqueadoPorPreview() {
+  if (!vistaPrevia) return false;
+  alert('Estás viendo la app como creadora (vista previa). Vuelve a administradora para enviar o guardar cambios de verdad.');
+  return true;
+}
 
 /* ---------------- API ---------------- */
 async function api(path, opts = {}) {
@@ -52,9 +61,10 @@ function mostrar(id) {
   $(id).scrollTop = 0;
 }
 function salir() {
-  token = ''; yo = null; casoActual = null;
+  token = ''; yo = null; casoActual = null; vistaPrevia = false;
   localStorage.removeItem('sdfa_token');
   $('btn-salir').hidden = true; $('quien').textContent = '';
+  $('btn-vista-creadora').hidden = true; $('franja-preview').hidden = true;
   mostrar('vista-auth');
 }
 
@@ -85,20 +95,61 @@ $('form-registro').onsubmit = async (e) => {
   } catch (err) { $('reg-error').textContent = err.message; }
 };
 function entrar(d) {
-  token = d.token; yo = d.user;
+  token = d.token; yo = d.user; vistaPrevia = false;
   localStorage.setItem('sdfa_token', token);
   $('btn-salir').hidden = false;
   $('quien').textContent = yo.rol === 'admin' ? `🌸 ${yo.nombre} (administradora)` : `Hola, ${yo.nombre}`;
-  $('lista-titulo').textContent = yo.rol === 'admin' ? 'Casos de la agencia' : 'Mis casos';
-  $('btn-nuevo-caso').hidden = yo.rol === 'admin';
-  $('admin-resumen').hidden = yo.rol !== 'admin';
-  $('filtros-estado').hidden = yo.rol !== 'admin';
+  aplicarVista();
   mostrar('vista-lista');
 }
 $('btn-salir').onclick = salir;
 
+/* ---------------- Vista previa como creadora (solo administradora) ---------------- */
+function aplicarVista() {
+  const rv = rolVista();
+  $('lista-titulo').textContent = rv === 'admin' ? 'Casos de la agencia' : 'Mis casos';
+  $('btn-nuevo-caso').hidden = rv === 'admin';
+  $('admin-resumen').hidden = rv !== 'admin';
+  $('filtros-estado').hidden = rv !== 'admin';
+  $('franja-preview').hidden = !vistaPrevia;
+  /* El botón de entrar a la vista previa solo existe para la administradora
+     y solo fuera de la vista previa (dentro, manda el de la franja). */
+  $('btn-vista-creadora').hidden = !yo || yo.rol !== 'admin' || vistaPrevia;
+}
+function textoChatSub(caso) {
+  return rolVista() === 'admin'
+    ? `${caso.creadoraNombre} ${caso.creadoraTiktok || ''} · ${ESTADO_LABELS[caso.estado]}`
+    : `Tu caso · ${ESTADO_LABELS[caso.estado]} · Solo tú y la administradora ven este chat`;
+}
+function refrescarVistaActual() {
+  if (!$('vista-lista').hidden) cargarLista();
+  if (!$('vista-chat').hidden && casoActual) {
+    $('chat-sub').textContent = textoChatSub(casoActual);
+    renderDetalles(casoActual);
+    cargarMensajes(false);
+  }
+}
+$('btn-vista-creadora').onclick = () => {
+  if (!yo || yo.rol !== 'admin') return;
+  vistaPrevia = true;
+  aplicarVista();
+  refrescarVistaActual();
+};
+$('btn-volver-admin').onclick = () => {
+  vistaPrevia = false;
+  aplicarVista();
+  refrescarVistaActual();
+};
+
 /* ---------------- Lista de casos ---------------- */
 async function cargarLista() {
+  if (vistaPrevia) {
+    /* Vista previa: se muestra la lista como la vería una creadora sin casos.
+       Los casos reales de la agencia NO se cargan ni se pintan aquí. */
+    $('lista-casos').innerHTML = '';
+    $('lista-vacia').hidden = false;
+    return;
+  }
   try {
     const { casos } = await api('/api/cases');
     if (yo.rol === 'admin') {
@@ -146,6 +197,7 @@ $('btn-cancelar-caso').onclick = () => mostrar('vista-lista');
 /* ---------------- Abrir caso ---------------- */
 $('form-caso').onsubmit = async (e) => {
   e.preventDefault(); $('caso-error').textContent = '';
+  if (vistaPrevia) { $('caso-error').textContent = 'Esto es solo una vista previa: así abre su caso una creadora. Vuelve a administradora para trabajar de verdad.'; return; }
   try {
     const d = await api('/api/cases', {
       method: 'POST',
@@ -165,9 +217,7 @@ async function abrirCaso(id) {
     const { caso } = await api('/api/cases/' + id);
     casoActual = caso;
     $('chat-titulo').textContent = caso.titulo;
-    $('chat-sub').textContent = yo.rol === 'admin'
-      ? `${caso.creadoraNombre} ${caso.creadoraTiktok || ''} · ${ESTADO_LABELS[caso.estado]}`
-      : `Tu caso · ${ESTADO_LABELS[caso.estado]} · Solo tú y la administradora ven este chat`;
+    $('chat-sub').textContent = textoChatSub(caso);
     renderDetalles(caso);
     mostrar('vista-chat');
     await cargarMensajes(true);
@@ -189,15 +239,16 @@ function renderDetalles(caso) {
   $('dato-link').value = caso.linkVideo || '';
   $('dato-pps').value = caso.pps || '';
   $('dato-apelo').value = caso.yaApelo || '';
-  $('form-datos').style.display = yo.rol === 'admin' ? 'none' : '';
-  $('admin-controles').hidden = yo.rol !== 'admin';
-  if (yo.rol === 'admin') {
+  $('form-datos').style.display = rolVista() === 'admin' ? 'none' : '';
+  $('admin-controles').hidden = rolVista() !== 'admin';
+  if (rolVista() === 'admin') {
     $('admin-estado').innerHTML = ESTADOS.map((e) => `<option value="${e}" ${e === caso.estado ? 'selected' : ''}>${ESTADO_LABELS[e]}</option>`).join('');
     $('admin-gravedad').value = caso.gravedad || 'sin_clasificar';
   }
 }
 $('form-datos').onsubmit = async (e) => {
   e.preventDefault();
+  if (bloqueadoPorPreview()) return;
   try {
     const d = await api(`/api/cases/${casoActual.id}/datos`, {
       method: 'PATCH',
@@ -224,7 +275,7 @@ async function cargarMensajes(bajar) {
     const caja = $('chat-mensajes');
     const estabaAbajo = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 140;
     caja.innerHTML = mensajes.map((m) => {
-      const mio = yo.rol === 'admin' ? m.autor === 'admin' : m.autor === 'creadora';
+      const mio = rolVista() === 'admin' ? m.autor === 'admin' : m.autor === 'creadora';
       const clase = m.tipo === 'sticker' ? 'msg sticker' : `msg ${mio ? 'propio' : 'ajeno'}`;
       let cuerpo = '';
       if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
@@ -244,6 +295,7 @@ async function cargarMensajes(bajar) {
 }
 
 async function enviarTexto() {
+  if (bloqueadoPorPreview()) return;
   const t = $('input-texto').value.trim();
   if (!t || !casoActual) return;
   $('input-texto').value = ''; autoAltura();
@@ -268,6 +320,7 @@ $('btn-sticker').onclick = () => { $('stickers').hidden = !$('stickers').hidden;
 for (const b of $('stickers').querySelectorAll('button')) {
   b.onclick = async () => {
     $('stickers').hidden = true;
+    if (bloqueadoPorPreview()) return;
     try {
       await api(`/api/cases/${casoActual.id}/messages`, { method: 'POST', body: JSON.stringify({ sticker: b.dataset.s }) });
       cargarMensajes(true);
@@ -281,6 +334,7 @@ $('input-file').onchange = async () => {
   const f = $('input-file').files[0];
   $('input-file').value = '';
   if (!f || !casoActual) return;
+  if (bloqueadoPorPreview()) return;
   const fd = new FormData(); fd.append('file', f);
   try {
     const r = await fetch(`/api/cases/${casoActual.id}/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
@@ -293,6 +347,7 @@ $('input-file').onchange = async () => {
 /* Notas de voz */
 let recorder = null, chunks = [];
 $('btn-audio').onclick = async () => {
+  if (bloqueadoPorPreview()) return;
   if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
