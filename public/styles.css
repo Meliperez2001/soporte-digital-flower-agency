@@ -26,9 +26,20 @@ body{
   background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
   color:var(--texto);
   /* App shell: la pantalla nunca hace scroll como página web; el alto es
-     fijo y solo se mueve el área de contenido (.vista / .chat-mensajes). */
-  height:100vh;
-  height:100dvh;
+     fijo y solo se mueve el área de contenido (.vista / .chat-mensajes).
+     El alto NO sale de 100vh/100dvh: en el iPhone instalado (standalone)
+     WebKit calcula 100dvh CORTO, como si existiera la barra de Safari
+     que en la app instalada no existe, y la carcasa terminaba antes del
+     borde inferior — el composer «flotaba» con una franja blanca grande
+     debajo (captura de Mell, 23/11 18:15). Con position:fixed e inset:0
+     la carcasa se pega a los bordes reales de la pantalla visible y el
+     último elemento de la columna (el composer en el chat) queda abajo
+     del todo, como en WhatsApp. Al abrirse el teclado, iOS reduce la
+     ventana y la carcasa fija se reajusta igual: el composer sigue
+     visible sobre el teclado. */
+  position:fixed;
+  inset:0;
+  height:auto;
   overflow:hidden;
   overscroll-behavior:none;
   display:flex;flex-direction:column;

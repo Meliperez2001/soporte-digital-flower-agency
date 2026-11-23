@@ -578,9 +578,30 @@ app.patch('/api/admin/usuarios/:id/rol', auth, soloAdmin, (req, res) => {
 /* ------------------------------------------------------------------ */
 /* Frontend (PWA)                                                      */
 /* ------------------------------------------------------------------ */
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
+/* La carcasa (index.html, styles.css, app.js, sw.js y el manifest) se
+   sirve SIN caché HTTP (no-cache, no-store, must-revalidate): con el
+   maxAge de 1 h anterior, Safari —sobre todo el iPhone con la app
+   instalada— se quedaba con copias viejas y la app cargaba versiones
+   MEZCLADAS (HTML nuevo con el CSS de dos versiones atrás) aunque se
+   cerrara y se volviera a agregar a inicio. El resto de estáticos
+   (iconos) sí conserva su hora de caché. */
+const SHELL_FILES = new Set(['index.html', 'styles.css', 'app.js', 'sw.js', 'manifest.webmanifest']);
+function sinCache(res) {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    setHeaders(res, filePath) {
+      if (SHELL_FILES.has(path.basename(filePath))) sinCache(res);
+      else res.setHeader('Cache-Control', 'public, max-age=3600');
+    },
+  })
+);
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Ruta no encontrada.' });
+  sinCache(res);
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
