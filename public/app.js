@@ -611,7 +611,7 @@ async function cargarMensajes(bajar) {
       if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
       else if (m.tipo === 'sticker') cuerpo = esc(m.texto);
       else if (m.tipo === 'audio') cuerpo = `<audio controls src="${urlAdjunto(m)}"></audio>`;
-      else if ((m.mime || '').startsWith('image/')) cuerpo = `<a href="${urlAdjunto(m)}" target="_blank"><img src="${urlAdjunto(m)}" alt="foto"></a>`;
+      else if ((m.mime || '').startsWith('image/')) cuerpo = `<img class="foto-msg" src="${urlAdjunto(m)}" alt="foto">`;
       else if ((m.mime || '').startsWith('video/')) cuerpo = `<video controls src="${urlAdjunto(m)}"></video>`;
       else cuerpo = `<a class="doc" href="${urlAdjunto(m)}" target="_blank">📄 ${esc(m.nombreArchivo || 'Documento')}</a>`;
       const cita = m.respuesta
@@ -632,6 +632,32 @@ async function cargarMensajes(bajar) {
     if (bajar || estabaAbajo) caja.scrollTop = caja.scrollHeight;
   } catch (e) { /* poll silencioso */ }
 }
+
+/* ---------------- Visor de fotos a pantalla completa ----------------
+   Las fotos del chat se ven completas en la burbuja; al tocarlas se
+   abren aquí, enteras y con su proporción. Doble toque (o doble clic)
+   acerca la imagen y se puede recorrer arrastrando; ✕ o tocar el
+   fondo la cierra. Antes la foto era un enlace que abría el archivo
+   suelto fuera del chat, en una vista pequeña donde había que mover
+   la imagen por dentro de un cuadrito. */
+function abrirVisor(url) {
+  const visor = $('visor-foto');
+  $('visor-img').src = url;
+  visor.classList.remove('zoom');
+  visor.hidden = false;
+}
+function cerrarVisor() {
+  $('visor-foto').hidden = true;
+  $('visor-foto').classList.remove('zoom');
+  $('visor-img').removeAttribute('src');
+}
+$('visor-cerrar').onclick = cerrarVisor;
+$('visor-foto').addEventListener('click', (e) => { if (e.target === e.currentTarget) cerrarVisor(); });
+$('visor-img').addEventListener('dblclick', () => $('visor-foto').classList.toggle('zoom'));
+$('chat-mensajes').addEventListener('click', (e) => {
+  const img = e.target.closest('img.foto-msg');
+  if (img) abrirVisor(img.src);
+});
 
 /* ---------------- Responder con cita (tipo WhatsApp) ---------------- */
 function activarRespuesta(m) {

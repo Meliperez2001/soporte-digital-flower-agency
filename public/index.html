@@ -161,7 +161,7 @@
 
 <main id="vista-chat" class="vista vista-chat" hidden>
   <section class="chat-head">
-    <button id="btn-volver" class="btn btn-ghost">← Volver</button>
+    <button id="btn-volver" class="btn btn-ghost" title="Volver a los casos">←</button>
     <span id="chat-avatar" class="avatar"></span>
     <div class="chat-titulo">
       <h2 id="chat-titulo"></h2>
@@ -186,30 +186,29 @@
     </form>
   </details>
 
-  <!-- Panel de la administradora FUERA de los detalles plegados: antes
-       vivía dentro de «Detalles y evidencia», cerrado, y había que
-       abrirlo, bajar y acordarse de pulsar Guardar; en el teléfono las
-       marcas de estado/gravedad quedaban escondidas y no se aplicaban.
-       Ahora la barra se ve al entrar al caso y cada cambio se guarda
-       solo, al momento, sin botón. -->
+  <!-- Barra de la administradora: UNA sola fila fina y compacta bajo la
+       cabecera (selectores pequeños de Estado y Gravedad en línea y el
+       eliminar como botón de ícono). La versión anterior era un panel
+       rosado enorme y fijo —dos selectores grandes, botón grande y un
+       párrafo explicativo— que se comía un tercio de la pantalla del
+       teléfono y no se podía quitar, dejando el chat chiquitico. La
+       explicación de qué borra el eliminar va en el diálogo de
+       confirmación, no ocupando pantalla. Cada cambio de los selectores
+       se guarda solo, al momento, sin botón Guardar. Solo la ven las
+       administradoras. -->
   <div id="admin-controles" class="admin-bar" hidden>
-    <div class="row">
-      <label>Estado
-        <select id="admin-estado"></select>
-      </label>
-      <label>Gravedad
-        <select id="admin-gravedad">
-          <option value="sin_clasificar">Sin clasificar</option>
-          <option value="grave">🚨 Grave</option>
-          <option value="no_grave">No grave</option>
-        </select>
-      </label>
-      <span id="admin-guardado" class="admin-guardado" hidden>✓ Guardado</span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn btn-peligro" id="btn-eliminar-caso" type="button">🗑️ Eliminar caso</button>
-      <span class="hint">Borra el caso completo con su chat y sus adjuntos. No se puede deshacer.</span>
-    </div>
+    <label class="admin-campo">Estado
+      <select id="admin-estado"></select>
+    </label>
+    <label class="admin-campo">Gravedad
+      <select id="admin-gravedad">
+        <option value="sin_clasificar">Sin clasificar</option>
+        <option value="grave">🚨 Grave</option>
+        <option value="no_grave">No grave</option>
+      </select>
+    </label>
+    <span id="admin-guardado" class="admin-guardado" hidden>✓ Guardado</span>
+    <button class="btn-eliminar-icono" id="btn-eliminar-caso" type="button" title="Eliminar caso">🗑️</button>
   </div>
 
   <section id="chat-mensajes" class="chat-mensajes" aria-live="polite"></section>
@@ -244,6 +243,13 @@
     <input type="file" id="input-archivo" hidden accept="application/pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx,audio/*">
   </section>
 </main>
+
+<!-- Visor de fotos a pantalla completa: al tocar una foto del chat se
+     abre aquí, entera y con su proporción; doble toque para acercar. -->
+<div id="visor-foto" class="visor" hidden>
+  <button id="visor-cerrar" class="visor-cerrar" type="button" title="Cerrar">✕</button>
+  <img id="visor-img" alt="foto">
+</div>
 
 <footer class="pie">
   <small>🌸 Soporte Digital Flower Agency · Tu caso es privado: nadie ve el chat de nadie.</small>

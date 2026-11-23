@@ -235,32 +235,46 @@ h3{color:var(--purpura-oscuro)}
    un cuadradito pequeño en el medio de la pantalla. */
 .vista-chat{display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0}
 .chat-head{
-  display:flex;gap:10px;align-items:center;flex:none;
-  background:#fff;border-bottom:1px solid var(--borde);padding:8px 10px;
+  display:flex;gap:8px;align-items:center;flex:none;
+  background:#fff;border-bottom:1px solid var(--borde);padding:6px 8px;
 }
-.chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff;padding:7px 12px}
-.chat-head .avatar{width:38px;height:38px}
+.chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff;padding:5px 10px;font-size:18px;line-height:1.2}
+.chat-head .avatar{width:32px;height:32px}
 .chat-titulo{min-width:0;flex:1}
-.chat-titulo h2{margin:0;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-titulo p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.detalles summary{cursor:pointer;font-weight:700;color:var(--purpura-oscuro)}
+.chat-titulo h2{margin:0;font-size:16px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-titulo p{margin:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.detalles summary{cursor:pointer;font-weight:700;color:var(--purpura-oscuro);font-size:14px}
 .detalles{padding:14px 18px;flex:none;max-height:45%;overflow-y:auto;overscroll-behavior:contain}
 /* En el chat, «Detalles» es una barra pegada a la cabecera, no una
-   tarjeta flotante con margen y sombra. */
+   tarjeta flotante con margen y sombra. Cerrada es solo una fila fina. */
 .vista-chat .detalles{
   margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;
-  box-shadow:none;padding:10px 14px;
+  box-shadow:none;padding:7px 12px;
 }
-/* Barra de la administradora dentro del caso: visible al entrar (fuera
-   de los detalles plegados), con los selectores de estado y gravedad
-   que se guardan solos al cambiarlos. */
+/* Barra de la administradora dentro del caso: UNA fila fina y compacta
+   (etiqueta y selector pequeños en línea, eliminar como botón de ícono
+   al final). La versión anterior era un panel fijo de dos filas con
+   selectores y botón grandes y un párrafo explicativo: ocupaba como un
+   tercio de la pantalla del teléfono, no se podía quitar y dejaba el
+   área de mensajes chiquitica. El autoguardado al cambiar los
+   selectores se mantiene. */
 .admin-bar{
-  flex:none;padding:10px 14px;background:var(--rosa-suave);
+  flex:none;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
+  padding:5px 10px;background:var(--rosa-suave);
   border-bottom:1px solid var(--borde);
 }
-.admin-bar label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--purpura-oscuro)}
-.admin-bar select{font:inherit;padding:8px;border:1px solid var(--borde);border-radius:10px;background:#fff;color:var(--texto)}
-.admin-guardado{color:var(--purpura);font-weight:700;font-size:14px;padding-bottom:8px}
+.admin-campo{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--purpura-oscuro);min-width:0}
+.admin-campo select{
+  font:inherit;font-size:13px;padding:4px 6px;max-width:44vw;
+  border:1px solid var(--borde);border-radius:8px;background:#fff;color:var(--texto);
+}
+.btn-eliminar-icono{
+  margin-left:auto;flex:none;width:32px;height:32px;border-radius:50%;
+  background:#fdeceb;border:1px solid #f5c6c2;color:var(--grave);
+  font-size:15px;line-height:1;cursor:pointer;padding:0;
+}
+.btn-eliminar-icono:hover{background:#fadbd8}
+.admin-guardado{color:var(--purpura);font-weight:700;font-size:12px;white-space:nowrap}
 .check{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;font-size:14px}
 .check li::before{content:"⬜ ";color:var(--muted)}
 .check li.ok::before{content:"✅ "}
@@ -279,7 +293,34 @@ h3{color:var(--purpura-oscuro)}
 .msg.propio{align-self:flex-end;background:var(--purpura);color:#fff;border-bottom-right-radius:6px}
 .msg.ajeno{align-self:flex-start;background:#fff;border:1px solid var(--borde);border-bottom-left-radius:6px}
 .msg.sticker{background:transparent;box-shadow:none;font-size:52px;padding:2px}
-.msg img,.msg video{max-width:100%;border-radius:12px;display:block}
+.msg video{max-width:100%;border-radius:12px;display:block}
+/* Fotos del chat: COMPLETAS, a todo el ancho de la burbuja y con su
+   proporción natural — sin max-height, sin object-fit que recorte y
+   sin caja con scroll interno (antes una captura larga se veía
+   encerrada en un cuadrito recortado y había que moverla por dentro).
+   Al tocarla se abre el visor a pantalla completa. */
+.msg img.foto-msg{
+  width:100%;height:auto;max-height:none;object-fit:contain;
+  border-radius:12px;display:block;cursor:zoom-in;
+}
+/* Visor de fotos a pantalla completa: la imagen entera, contenida en
+   la pantalla con su proporción; con doble toque se acerca (zoom) y se
+   puede recorrer arrastrando dentro del propio visor. */
+.visor{
+  position:fixed;inset:0;z-index:100;background:rgba(24,6,36,.96);
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.visor img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}
+.visor.zoom{overflow:auto;display:block}
+.visor.zoom img{
+  width:200%;max-width:none;max-height:none;height:auto;margin:auto;display:block;
+  cursor:zoom-out;touch-action:pan-x pan-y;
+}
+.visor-cerrar{
+  position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:101;
+  width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.5);
+  background:rgba(0,0,0,.45);color:#fff;font-size:17px;line-height:1;cursor:pointer;padding:0;
+}
 .msg .doc{
   display:inline-flex;gap:8px;align-items:center;background:var(--rosa-suave);color:var(--purpura-oscuro);
   padding:9px 12px;border-radius:12px;text-decoration:none;font-weight:600;font-size:14px;
