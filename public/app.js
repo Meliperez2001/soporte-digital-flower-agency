@@ -77,6 +77,9 @@ function mostrar(id) {
   /* El panel de stickers y la barra de escribir solo existen dentro del chat:
      al salir de esa vista se cierran siempre. */
   if (id !== 'vista-chat') { $('stickers').hidden = true; $('menu-mas').hidden = true; }
+  /* En el chat, el pie del shell se esconde (body.en-chat) para que la
+     conversación ocupe toda la altura, como un chat normal. */
+  document.body.classList.toggle('en-chat', id === 'vista-chat');
   clearInterval(poll); poll = null;
   if (id === 'vista-lista') { cargarLista(); poll = setInterval(cargarLista, 15000); }
   if (id === 'vista-chat') { poll = setInterval(() => cargarMensajes(false), 6000); }

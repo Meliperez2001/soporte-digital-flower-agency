@@ -27,6 +27,7 @@ body{
   color:var(--texto);
   /* App shell: la pantalla nunca hace scroll como página web; el alto es
      fijo y solo se mueve el área de contenido (.vista / .chat-mensajes). */
+  height:100vh;
   height:100dvh;
   overflow:hidden;
   overscroll-behavior:none;
@@ -224,23 +225,43 @@ h3{color:var(--purpura-oscuro)}
   background:var(--grave);color:#fff;border-radius:999px;min-width:22px;height:22px;
   display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;padding:0 6px;
 }
-/* Vista de chat: cabecera fija, mensajes con su propio scroll y composer
-   fijo abajo, todo dentro del shell (la vista en sí no hace scroll). */
-.vista-chat{display:flex;flex-direction:column;gap:10px;overflow:hidden}
-.chat-head{display:flex;gap:10px;align-items:center;flex:none}
-.chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff}
-.chat-titulo h2{margin:0}
+/* Vista de chat: ocupa TODA la altura que deja el shell, como un chat
+   normal — cabecera compacta arriba, mensajes ocupando todo el medio con
+   su propio scroll y composer pegado abajo a todo el ancho. Sin padding
+   ni huecos de la .vista genérica y sin tarjetas flotantes: antes la
+   vista heredaba el padding de .vista, el encabezado del caso era
+   enorme, los mensajes iban en una caja con borde y el composer en otra
+   tarjeta con sombra, y entre todo eso el área de mensajes quedaba como
+   un cuadradito pequeño en el medio de la pantalla. */
+.vista-chat{display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0}
+.chat-head{
+  display:flex;gap:10px;align-items:center;flex:none;
+  background:#fff;border-bottom:1px solid var(--borde);padding:8px 10px;
+}
+.chat-head .btn-ghost{color:var(--purpura-oscuro);border-color:var(--borde);background:#fff;padding:7px 12px}
+.chat-head .avatar{width:38px;height:38px}
+.chat-titulo{min-width:0;flex:1}
+.chat-titulo h2{margin:0;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-titulo p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .detalles summary{cursor:pointer;font-weight:700;color:var(--purpura-oscuro)}
 .detalles{padding:14px 18px;flex:none;max-height:45%;overflow-y:auto;overscroll-behavior:contain}
+/* En el chat, «Detalles» es una barra pegada a la cabecera, no una
+   tarjeta flotante con margen y sombra. */
+.vista-chat .detalles{
+  margin:0;border-radius:0;border-left:none;border-right:none;border-top:none;
+  box-shadow:none;padding:10px 14px;
+}
 .check{list-style:none;margin:10px 0;padding:0;display:grid;gap:6px;font-size:14px}
 .check li::before{content:"⬜ ";color:var(--muted)}
 .check li.ok::before{content:"✅ "}
 .chat-mensajes{
-  display:flex;flex-direction:column;gap:8px;padding:16px 10px;
-  /* La zona de mensajes es la que se desplaza dentro del chat. */
+  display:flex;flex-direction:column;gap:8px;padding:14px 10px;
+  /* La zona de mensajes es la que crece y se desplaza dentro del chat:
+     ocupa todo el espacio entre la cabecera y el composer, a todo el
+     ancho y sin caja con borde que la recorte a un cuadradito. */
   flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
-  background:rgba(255,255,255,.65);border:1px solid var(--borde);border-radius:var(--radio);
+  background:rgba(255,255,255,.65);
 }
 .msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:15px;line-height:1.35;box-shadow:0 2px 8px rgba(117,29,149,.08)}
 .msg .autor{font-size:12px;font-weight:700;margin-bottom:3px;opacity:.8}
@@ -255,10 +276,13 @@ h3{color:var(--purpura-oscuro)}
 }
 .msg audio{max-width:100%}
 .chat-input{
-  /* Composer fijo del shell del chat: último elemento de la columna,
-     siempre visible abajo sin necesidad de sticky. */
-  flex:none;background:var(--tarjeta);border:1px solid var(--borde);
-  border-radius:var(--radio);box-shadow:var(--sombra);
+  /* Composer pegado abajo del todo: último elemento de la columna del
+     chat, a todo el ancho, como la barra inferior de WhatsApp. No es una
+     tarjeta flotante: sin bordes redondeados ni sombra, solo la línea
+     superior que lo separa de los mensajes. La vista previa de respuesta
+     («Respondiendo a…») y los paneles de stickers/adjuntos viven dentro
+     de este mismo bloque fijo, justo encima de la fila de escribir. */
+  flex:none;background:var(--tarjeta);border-top:1px solid var(--borde);
   padding:10px 10px calc(10px + env(safe-area-inset-bottom));
 }
 .input-row{display:flex;gap:8px;align-items:flex-end}
@@ -313,6 +337,9 @@ h3{color:var(--purpura-oscuro)}
 .stickers button{font-size:30px;background:var(--rosa-suave);border:1px solid var(--borde);border-radius:12px;padding:6px 10px;cursor:pointer}
 .grabando{color:var(--grave);font-size:13px;margin:8px 2px 0}
 .pie{text-align:center;color:var(--muted);padding:10px 14px;font-size:13px;flex:none}
+/* Dentro de un caso el pie no se muestra: ese alto es para la
+   conversación, como en un chat normal (la clase la pone mostrar()). */
+body.en-chat .pie{display:none}
 @media (max-width:560px){
   /* Topbar móvil: la MISMA fila única de escritorio, con píldoras pequeñas
      proporcionales. La marca cede espacio truncándose con ellipsis y las
