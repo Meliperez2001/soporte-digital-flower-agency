@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
@@ -401,6 +401,55 @@ app.get('/api/cases/:id', auth, (req, res) => {
   /* Los casos viejos no traen sala de llamada: se les crea al abrirlos. */
   if (!caso.sala) { caso.sala = 'dfa-soporte-' + caso.id + '-' + Math.random().toString(36).slice(2, 10); save(); }
   res.json({ caso: { ...caso, creadoraFoto: fotoDe(caso.creadoraId), evidencia: evidenciaDe(caso) } });
+});
+
+/* Llamada del caso (v26, pedido de Mell el 25/11/2026): antes el botón
+   «Llamar» solo abría la sala a quien llamaba y la otra parte NUNCA se
+   enteraba, así que la llamada no le entraba a nadie. Ahora llamar
+   deja un mensaje visible en el chat y manda una notificación push de
+   llamada a la otra parte (a la creadora si llama el equipo, a las
+   administradoras si llama la creadora). Al tocar la notificación la
+   app abre directamente este caso, y ahí la otra parte toca «Llamar»
+   y entra a la misma sala. */
+app.post('/api/cases/:id/llamar', auth, (req, res) => {
+  const caso = getCasoVisible(req, res);
+  if (!caso) return;
+  if (!caso.sala) { caso.sala = 'dfa-soporte-' + caso.id + '-' + Math.random().toString(36).slice(2, 10); }
+  const esAdmin = req.user.rol === 'admin';
+  const msg = {
+    id: nextId('msg'),
+    casoId: caso.id,
+    autor: esAdmin ? 'admin' : 'creadora',
+    autorId: req.user.id,
+    autorNombre: req.user.nombre,
+    tipo: 'texto',
+    texto: `📞 ${req.user.nombre} te está llamando ahora. Toca «📞 Llamar» arriba para entrar a la llamada.`,
+    createdAt: new Date().toISOString(),
+    leidoAdmin: esAdmin,
+    leidoCreadora: !esAdmin,
+    llamada: true,
+  };
+  db.messages.push(msg);
+  caso.updatedAt = msg.createdAt;
+  save();
+  res.json({ ok: true, sala: caso.sala });
+  try {
+    if (esAdmin) {
+      const sinLeer = db.messages.filter((m) => m.casoId === caso.id && m.autor !== 'creadora' && !m.leidoCreadora && !m.eliminado).length;
+      enviarPush([caso.creadoraId], {
+        title: '📞 Te están llamando',
+        body: `${req.user.nombre} te está llamando por Soporte DFA. Toca aquí, abre el chat y toca «📞 Llamar» para entrar.`,
+        casoId: caso.id, sinLeer, llamada: true,
+      });
+    } else {
+      const sinLeer = db.messages.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length;
+      enviarPush(idsAdministradoras(), {
+        title: '📞 Te están llamando',
+        body: `${req.user.nombre} te está llamando por Soporte DFA. Toca aquí, abre el chat y toca «📞 Llamar» para entrar.`,
+        casoId: caso.id, sinLeer, llamada: true,
+      });
+    }
+  } catch (e) { /* el aviso es un extra; el mensaje ya quedó en el chat */ }
 });
 
 app.patch('/api/cases/:id', auth, soloAdmin, (req, res) => {
