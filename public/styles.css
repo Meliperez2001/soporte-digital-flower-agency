@@ -4,22 +4,27 @@
   --purpura-oscuro:#5b1476;
   --purpura-claro:#9b4bc4;
   --rosa:#f7a8c4;
-  --rosa-suave:#fdeef4;
-  --fondo:#faf5fc;
-  --tarjeta:#ffffff;
-  --texto:#2b1236;
-  --muted:#7a6a84;
-  --borde:#ead9f3;
+  --rosa-suave:#2c1e40;
+  --fondo:#0e0a14;
+  --tarjeta:#1e1629;
+  --texto:#f3ecfa;
+  --muted:#b6a5c6;
+  --borde:#3b2a50;
   --grave:#d92d20;
   --ok:#12805c;
   --radio:16px;
-  --sombra:0 8px 28px rgba(117,29,149,.14);
+  --sombra:0 8px 28px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box}
 /* El atributo hidden manda siempre: sin esto, reglas como .vista-chat{display:flex}
    o .stickers{display:flex} lo pisan y las vistas "ocultas" quedan visibles. */
 [hidden]{display:none !important}
-html{height:100%}
+/* text-size-adjust al 100%: sin esto, WebKit en el iPhone agranda SOLO
+   los textos largos de algunos mensajes (font boosting) y la letra se
+   veía dispareja — unos mensajes grandes y otros chiquitos con el mismo
+   CSS (reporte de Mell, 25/11/2026). Con el ajuste fijo, todo el chat
+   se lee al tamaño exacto de la regla, parejo. */
+html{height:100%;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html,body{margin:0;padding:0}
 /* v20 (pedido de Mell el 25/11/2026): la app instalada se comporta como
    aplicación y no como página web: sin desborde horizontal y sin que la
@@ -30,7 +35,7 @@ html,body{overflow-x:hidden}
 body{touch-action:manipulation;overscroll-behavior:none}
 body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
+  background:linear-gradient(180deg,#241239 0%,var(--fondo) 220px);
   color:var(--texto);
   /* App shell: la pantalla nunca hace scroll como página web; el alto es
      fijo y solo se mueve el área de contenido (.vista / .chat-mensajes).
@@ -278,7 +283,7 @@ h3{color:var(--purpura-oscuro)}
 .vista-chat{
   position:fixed;inset:0;z-index:30;width:auto;margin:0;
   display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0;
-  background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
+  background:linear-gradient(180deg,#241239 0%,var(--fondo) 220px);
 }
 .chat-head{
   display:flex;gap:8px;align-items:center;flex:none;
@@ -350,7 +355,7 @@ h3{color:var(--purpura-oscuro)}
 }
 /* v20: letra del chat un poco más grande (Mell: «están muy pequeñitas»):
    el texto del mensaje sube de 15 a 17 px, y autor y hora un punto. */
-.msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:17px;line-height:1.4;box-shadow:0 2px 8px rgba(117,29,149,.08)}
+.msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:16px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .msg .autor{font-size:13px;font-weight:700;margin-bottom:3px;opacity:.8}
 .msg .hora{font-size:12px;opacity:.6;margin-top:4px;text-align:right}
 .msg.propio{align-self:flex-end;background:var(--purpura);color:#fff;border-bottom-right-radius:6px}
@@ -513,3 +518,39 @@ body.en-chat .pie{display:none}
   .msg{max-width:88%}
   .quien{display:none}
 }
+
+/* ===== v22: tema oscuro en TODA la app + candado lateral =====
+   Pedidos de Mell (25/11/2026): el chat quedó negro pero el inicio
+   («Casos de la agencia») seguía en blanco — «ponlo en negro todo».
+   Las variables de :root ya van oscuras; aquí se aclaran los textos
+   que estaban en púrpura oscuro pensado pa' fondos claros y se
+   oscurecen los fondos blancos escritos a mano. La burbuja ajena se
+   queda BLANCA con su texto oscuro, como Mell aprobó en la v20: es
+   el contraste que deja leer la evidencia. Y los contenedores con
+   scroll solo aceptan gesto vertical (pan-y): la pantalla ya no se
+   mueve de lado ni dentro de las listas. */
+.vista,.chat-mensajes,.detalles{touch-action:pan-y}
+.vista,.chat-mensajes{overflow-x:hidden}
+h1,h2,h3{color:#e9d7f8}
+.tab{color:#e9d7f8}
+.chip{color:#e9d7f8}
+.btn-soft{color:#e9d7f8}
+.franja-preview{color:#e9d7f8}
+.filtro{background:#251a33;color:var(--texto)}
+.usuaria-item{background:var(--tarjeta)}
+.form input,.form select,.form textarea{background:#251a33;color:var(--texto)}
+.row select{background:#251a33;color:var(--texto)}
+.admin-seccion select{background:#251a33}
+.admin-seccion h3,.admin-seccion label{color:#cf8ae9}
+.resumen .stat b{color:#cf8ae9}
+.detalles summary{color:#cf8ae9}
+.vista-chat .detalles summary{color:#cf8ae9}
+.btn-opciones-msg{color:#e9d7f8}
+.reply-bar-texto strong{color:#cf8ae9}
+.reply-bar .btn-ghost{color:#e9d7f8}
+.msg.ajeno{color:#2b1236}
+.msg.ajeno .hora{color:#8a7a96}
+.msg.ajeno .cita{background:#f3e6f8;color:#4a2b5e}
+.msg.ajeno .cita strong{color:var(--purpura-oscuro)}
+.msg.ajeno .doc{background:#f3e6f8}
+.msg.propio .doc{background:#f1e4f9;color:var(--purpura-oscuro)}
