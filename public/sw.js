@@ -14,8 +14,8 @@
    el JS con ?v=NN para romper cualquier copia vieja al cambiar de
    versión. Flujo al llegar un SW nuevo: skipWaiting al instalar,
    borrado de los cachés viejos al activar y clients.claim. */
-const CACHE = 'soporte-dfa-v23';
-const SHELL = ['/', '/index.html', '/styles.css?v=23', '/app.js?v=23', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'soporte-dfa-v24';
+const SHELL = ['/', '/index.html', '/styles.css?v=24', '/app.js?v=24', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -48,4 +48,35 @@ self.addEventListener('fetch', (e) => {
       })
       .catch(() => caches.match(e.request))
   );
+});
+
+/* Notificaciones push (v24): el servidor avisa cuando hay un mensaje
+   nuevo o un caso nuevo, aunque la app esté cerrada. Al tocar la
+   notificación se enfoca la app (o se abre). El conteo de sin leer
+   viaja en el aviso y se pone sobre el ícono de la app. */
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { /* aviso sin datos */ }
+  const titulo = d.title || 'Soporte Digital Flower Agency';
+  const opciones = {
+    body: d.body || 'Tienes un mensaje nuevo.',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { casoId: d.casoId || null },
+    tag: 'caso-' + (d.casoId || 'general'),
+  };
+  const tareas = [self.registration.showNotification(titulo, opciones)];
+  try {
+    if (d.sinLeer > 0 && self.registration.setAppBadge) tareas.push(self.registration.setAppBadge(d.sinLeer).catch(() => {}));
+    else if (self.registration.clearAppBadge) tareas.push(self.registration.clearAppBadge().catch(() => {}));
+  } catch (e) { /* la insignia es un extra */ }
+  event.waitUntil(Promise.all(tareas));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const lista = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of lista) { if ('focus' in c) return c.focus(); }
+    if (clients.openWindow) return clients.openWindow('/');
+  })());
 });
