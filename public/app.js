@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -589,13 +589,26 @@ function extractoLocal(m) {
    mitad (el sondeo corre cada 6 segundos). */
 let firmaMensajes = '';
 
+/* Chips de reacciones de un mensaje (v20): una pastilla por emoji con
+   su conteo; la mía va resaltada. Sin reacciones, no se pinta nada. */
+function reaccionesHTML(m) {
+  if (!m.reacciones) return '';
+  const chips = Object.entries(m.reacciones)
+    .filter(([, u]) => (u || []).length)
+    .map(([e, u]) => `<span class="reaccion${yo && u.includes(yo.id) ? ' mia' : ''}">${e}${u.length > 1 ? ' ' + u.length : ''}</span>`)
+    .join('');
+  return chips ? `<div class="reacciones">${chips}</div>` : '';
+}
+
 async function cargarMensajes(bajar) {
   if (!casoActual) return;
   try {
     const { mensajes } = await api(`/api/cases/${casoActual.id}/messages`);
     mensajesPorId = new Map(mensajes.map((m) => [m.id, m]));
     const caja = $('chat-mensajes');
-    const firma = mensajes.map((m) => m.id).join(',');
+    /* La firma incluye las reacciones (v20): si la otra parte reacciona
+       a un mensaje, la lista se repinta aunque no haya mensajes nuevos. */
+    const firma = mensajes.map((m) => m.id + ':' + (m.reacciones ? Object.entries(m.reacciones).map(([e, u]) => e + (u || []).length).join('') : '')).join(',');
     if (firma === firmaMensajes) {
       /* Nada nuevo: no se toca el DOM, para no interrumpir un audio o
          video que se esté escuchando. Solo se honra el bajar al final. */
@@ -634,6 +647,7 @@ async function cargarMensajes(bajar) {
           ${m.tipo !== 'sticker' ? `<div class="autor">${esc(m.autorNombre || '')}</div>` : ''}
           ${cita}
           ${cuerpo}
+          ${reaccionesHTML(m)}
           <div class="hora">${hora(m.createdAt)}</div>
         </div>
         <button type="button" class="btn-opciones-msg" data-opciones-msg="${m.id}" title="Opciones del mensaje (responder / eliminar)">⋮</button>
@@ -669,6 +683,28 @@ $('chat-mensajes').addEventListener('click', (e) => {
   const img = e.target.closest('img.foto-msg');
   if (img) abrirVisor(img.src);
 });
+
+/* ---------------- Candado de app instalada (v20) ----------------
+   En el teléfono la app se abría como página web: con el pellizco o el
+   doble toque la pantalla se agrandaba y después se movía de lado al
+   arrastrar (video de Mell, 25/11/2026). Como aplicación instalada eso
+   no debe pasar: se bloquea el gesto de zoom y el doble toque rápido
+   sobre el contenido (los botones y campos quedan fuera del bloqueo
+   del doble toque, pa' no comerse toques legítimos). El visor de fotos
+   queda EXENTO: ahí el pellizco sí acerca la imagen. */
+function visorAbierto() { const v = $('visor-foto'); return v && !v.hidden; }
+document.addEventListener('gesturestart', (e) => { if (!visorAbierto()) e.preventDefault(); });
+document.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1 && !visorAbierto()) e.preventDefault();
+}, { passive: false });
+let ultimoToqueFin = 0;
+document.addEventListener('touchend', (e) => {
+  if (visorAbierto()) return;
+  if (e.target.closest('button, a, input, textarea, select, audio, video')) return;
+  const ahora = Date.now();
+  if (ahora - ultimoToqueFin < 300) e.preventDefault();
+  ultimoToqueFin = ahora;
+}, { passive: false });
 
 /* ---------------- Responder con cita (tipo WhatsApp) ---------------- */
 function activarRespuesta(m) {
@@ -879,6 +915,10 @@ const menuMsg = document.createElement('div');
 menuMsg.className = 'msg-menu';
 menuMsg.hidden = true;
 menuMsg.innerHTML = `
+  <div class="menu-reacciones">
+    <button type="button" data-reacc="❤️" title="Me encanta">❤️</button>
+    <button type="button" data-reacc="😂" title="Me divierte">😂</button>
+  </div>
   <button type="button" data-acc="responder">↩️ Responder</button>
   <button type="button" data-acc="eliminar">🗑️ Eliminar</button>`;
 document.body.appendChild(menuMsg);
@@ -898,11 +938,25 @@ function abrirMenuMsg(m, x, y) {
   menuAbiertoEn = Date.now();
   menuMsg.querySelector('[data-acc="eliminar"]').hidden = !puedeEliminar(m);
   menuMsg.hidden = false;
-  const ancho = 190, alto = 110;
+  const ancho = 190, alto = 175;
   menuMsg.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
   menuMsg.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
 }
 menuMsg.addEventListener('click', async (e) => {
+  /* Reacciones (v20): la fila de emojis va encima de las opciones; al
+     tocar uno se pone la reacción (o se quita si ya la tenía) y el menú
+     se cierra. La lista se repinta sola al volver el sondeo, y también
+     se fuerza aquí pa' que se vea al momento. */
+  const rb = e.target.closest('button[data-reacc]');
+  if (rb && menuMsgId != null) {
+    const mid = menuMsgId;
+    cerrarMenuMsg();
+    try {
+      await api(`/api/cases/${casoActual.id}/messages/${mid}/reaccion`, { method: 'POST', body: JSON.stringify({ emoji: rb.dataset.reacc }) });
+      cargarMensajes(false);
+    } catch (err) { alert(err.message); }
+    return;
+  }
   const b = e.target.closest('button[data-acc]');
   if (!b || menuMsgId == null) return;
   const m = mensajesPorId.get(menuMsgId);
