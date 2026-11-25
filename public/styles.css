@@ -237,6 +237,13 @@ h3{color:var(--purpura-oscuro)}
 .reply-bar .btn-ghost{color:var(--purpura-oscuro);padding:4px 8px;flex:none}
 .btn-peligro{background:#fdeceb;color:var(--grave);border:1px solid #f5c6c2}
 .btn-peligro:hover{background:#fadbd8}
+/* Sin leer (v24): punto rojo grande y nombre en negrita — imposible de
+   perder, como pidió Mell (antes solo había una pastilla pequeña). */
+.punto-rojo{
+  width:11px;height:11px;border-radius:50%;background:#e5484d;flex:none;
+  margin-top:7px;box-shadow:0 0 0 3px rgba(229,72,77,.22);
+}
+.caso-item.sin-leer .caso-info .t{font-weight:800}
 .caso-info{flex:1;min-width:0}
 .caso-info .t{font-weight:700}
 .caso-info .s{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
