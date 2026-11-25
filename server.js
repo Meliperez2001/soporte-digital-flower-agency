@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
@@ -433,15 +433,23 @@ app.post('/api/cases/:id/messages', auth, (req, res) => {
 });
 
 /** Reacciones a un mensaje (v20, pedido de Mell el 25/11/2026): tocar de
-    nuevo la misma reacción la quita (toggle). Solo se aceptan ❤️ y 😂.
-    Se guardan en el propio mensaje como { emoji: [ids de usuario] } y
-    viajan con la lista de mensajes, así ambas partes las ven. */
-const REACCIONES_OK = ['❤️', '😂'];
+    nuevo la misma reacción la quita (toggle). Desde la v23 se acepta
+    CUALQUIER emoji (las rápidas tipo WhatsApp o cualquiera del teclado
+    con el botón +), validado como un solo grafema sin letras, números
+    ni espacios. Se guardan en el propio mensaje como
+    { emoji: [ids de usuario] } y viajan con la lista de mensajes, así
+    ambas partes las ven. */
 app.post('/api/cases/:id/messages/:mid/reaccion', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
   if (!caso) return;
-  const emoji = String((req.body || {}).emoji || '');
-  if (!REACCIONES_OK.includes(emoji)) return res.status(400).json({ error: 'Reacción no válida.' });
+  const emoji = String((req.body || {}).emoji || '').trim();
+  let esUnEmoji = false;
+  if (emoji && emoji.length <= 16 && !/[\p{L}\p{N}\s]/u.test(emoji)) {
+    try {
+      esUnEmoji = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(emoji)].length === 1;
+    } catch (e) { esUnEmoji = [...emoji].length <= 4; }
+  }
+  if (!esUnEmoji) return res.status(400).json({ error: 'Reacción no válida.' });
   const msg = db.messages.find((m) => m.id === Number(req.params.mid) && m.casoId === caso.id && !m.eliminado);
   if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado.' });
   if (!msg.reacciones || typeof msg.reacciones !== 'object') msg.reacciones = {};
