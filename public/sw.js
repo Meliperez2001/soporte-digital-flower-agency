@@ -14,8 +14,8 @@
    el JS con ?v=NN para romper cualquier copia vieja al cambiar de
    versión. Flujo al llegar un SW nuevo: skipWaiting al instalar,
    borrado de los cachés viejos al activar y clients.claim. */
-const CACHE = 'soporte-dfa-v25';
-const SHELL = ['/', '/index.html', '/styles.css?v=25', '/app.js?v=25', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'soporte-dfa-v26';
+const SHELL = ['/', '/index.html', '/styles.css?v=26', '/app.js?v=26', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -63,8 +63,16 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     data: { casoId: d.casoId || null },
-    tag: 'caso-' + (d.casoId || 'general'),
+    tag: (d.llamada ? 'llamada-' : 'caso-') + (d.casoId || 'general'),
   };
+  /* Aviso de llamada (v26): la notificación se queda en pantalla hasta
+     que la toquen y vibra, pa' que se note que es una llamada y no un
+     mensaje más. */
+  if (d.llamada) {
+    opciones.requireInteraction = true;
+    opciones.vibrate = [300, 120, 300, 120, 300];
+    opciones.renotify = true;
+  }
   const tareas = [self.registration.showNotification(titulo, opciones)];
   try {
     if (d.sinLeer > 0 && self.registration.setAppBadge) tareas.push(self.registration.setAppBadge(d.sinLeer).catch(() => {}));
@@ -74,9 +82,17 @@ self.addEventListener('push', (event) => {
 });
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  /* Al tocar la notificación se abre DIRECTAMENTE el caso del aviso
+     (v26): la app lee el ?caso= al arrancar y entra a ese chat, donde
+     está el botón «Llamar» pa' unirse. */
+  const casoId = event.notification.data && event.notification.data.casoId;
+  const destino = casoId ? '/?caso=' + encodeURIComponent(casoId) : '/';
   event.waitUntil((async () => {
     const lista = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of lista) { if ('focus' in c) return c.focus(); }
-    if (clients.openWindow) return clients.openWindow('/');
+    for (const c of lista) {
+      if ('navigate' in c) { try { await c.navigate(destino); } catch (e) { /* si no puede navegar, solo enfoca */ } }
+      if ('focus' in c) return c.focus();
+    }
+    if (clients.openWindow) return clients.openWindow(destino);
   })());
 });
