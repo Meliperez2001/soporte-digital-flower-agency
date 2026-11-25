@@ -187,6 +187,14 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }));
 
+/* Versión pública de la app (v21): la consulta el actualizador
+   automático del cliente pa' saber si el servidor ya va por una
+   versión más nueva que la copia instalada. Debe coincidir con
+   APP_VERSION de public/app.js; ambas se suben juntas en cada
+   despliegue. Es solo una etiqueta, sin datos de nadie. */
+const APP_VERSION = 'v21';
+app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+
 /* ------------------------------------------------------------------ */
 /* Mi perfil: nombre y foto                                            */
 /* ------------------------------------------------------------------ */
