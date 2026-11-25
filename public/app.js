@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -105,6 +105,7 @@ function salir() {
   $('btn-perfil').hidden = true; $('mi-avatar').hidden = true;
   $('btn-vista-creadora').hidden = true; $('franja-preview').hidden = true;
   $('btn-usuarias').hidden = true; $('panel-usuarias').hidden = true;
+  $('btn-directorio').hidden = true; $('panel-directorio').hidden = true;
   cerrarMenuCaso();
   mostrar('vista-auth');
 }
@@ -218,7 +219,8 @@ function aplicarVista() {
   $('admin-resumen').hidden = rv !== 'admin';
   $('filtros-estado').hidden = rv !== 'admin';
   $('btn-usuarias').hidden = rv !== 'admin';
-  if (rv !== 'admin') { $('panel-usuarias').hidden = true; cerrarMenuCaso(); }
+  $('btn-directorio').hidden = rv !== 'admin';
+  if (rv !== 'admin') { $('panel-usuarias').hidden = true; $('panel-directorio').hidden = true; cerrarMenuCaso(); }
   $('franja-preview').hidden = !vistaPrevia;
   /* El botón de entrar a la vista previa es para TODAS las administradoras
      (yo.rol === 'admin', incluidas las promovidas desde el panel), no solo
@@ -307,6 +309,52 @@ async function cambiarRolUsuaria(id, rol) {
     cargarUsuarias();
     cargarLista();
   } catch (err) { alert(err.message); }
+}
+
+/* ---------------- Directorio: escribir directo a una creadora (v25) ----------------
+   Pedido de Mell (25/11/2026): poder buscar a las chicas por nombre y
+   escribirles ella primero, sin esperar a que abran un caso. La lista
+   sale del mismo endpoint de usuarias (el servidor verifica el rol);
+   al tocar «Escribir», el servidor abre (o reusa) la conversación
+   directa de esa creadora y se entra a su chat. */
+let directorioCache = [];
+$('btn-directorio').onclick = () => {
+  const panel = $('panel-directorio');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) { cargarDirectorio(); $('buscar-creadora').focus(); }
+};
+async function cargarDirectorio() {
+  if (!yo || yo.rol !== 'admin') return;
+  try {
+    const { usuarias } = await api('/api/admin/usuarios');
+    directorioCache = usuarias.filter((u) => u.rol !== 'admin');
+    pintarDirectorio();
+  } catch (e) { alert(e.message); }
+}
+function pintarDirectorio() {
+  const ql = $('buscar-creadora').value.trim().toLowerCase();
+  const lista = directorioCache.filter((u) => !ql
+    || (u.nombre || '').toLowerCase().includes(ql)
+    || (u.tiktok || '').toLowerCase().includes(ql));
+  $('lista-creadoras').innerHTML = lista.length ? lista.map((u) => `
+    <div class="usuaria-item">
+      ${avatarHTML(u.nombre, u.foto)}
+      <span class="caso-info">
+        <span class="t">${esc(u.nombre)} ${u.tiktok ? `<span class="muted">${esc(u.tiktok)}</span>` : ''}</span>
+      </span>
+      <button type="button" class="btn btn-primary" data-escribir="${u.id}">✉️ Escribir</button>
+    </div>`).join('') : '<p class="muted">Ninguna creadora coincide con esa búsqueda.</p>';
+  for (const b of $('lista-creadoras').querySelectorAll('button[data-escribir]')) {
+    b.onclick = () => escribirDirecto(Number(b.dataset.escribir));
+  }
+}
+$('buscar-creadora').oninput = pintarDirectorio;
+async function escribirDirecto(id) {
+  try {
+    const d = await api(`/api/creadoras/${id}/directo`, { method: 'POST', body: '{}' });
+    $('panel-directorio').hidden = true;
+    abrirCaso(d.caso.id);
+  } catch (e) { alert(e.message); }
 }
 
 /* ---------------- Lista de casos ---------------- */
