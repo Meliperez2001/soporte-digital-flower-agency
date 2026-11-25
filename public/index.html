@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Soporte DFA">
-<link rel="stylesheet" href="/styles.css?v=23">
+<link rel="stylesheet" href="/styles.css?v=24">
 </head>
 <body>
 <header class="topbar">
@@ -25,6 +25,7 @@
     </div>
   </div>
   <div class="top-actions">
+    <button id="btn-notif" class="btn btn-soft" hidden>🔔 Activar notificaciones</button>
     <button id="btn-instalar" class="btn btn-soft" hidden>Instalar la aplicación</button>
     <button id="btn-vista-creadora" class="btn btn-soft" hidden>👀 Ver como creadora</button>
     <span id="mi-avatar" class="avatar avatar-top" hidden></span>
@@ -169,6 +170,7 @@
       <h2 id="chat-titulo"></h2>
       <p id="chat-sub" class="muted small"></p>
     </div>
+    <button id="btn-llamar" class="btn btn-ghost" title="Llamada o videollamada con la otra parte de este caso">📞 Llamar</button>
   </section>
 
   <details class="card detalles" id="panel-detalles">
@@ -264,6 +266,6 @@
   <small id="version-pie" class="version-sello"></small>
 </footer>
 
-<script src="/app.js?v=23"></script>
+<script src="/app.js?v=24"></script>
 </body>
 </html>
