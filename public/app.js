@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -166,6 +166,8 @@ function entrar(d) {
   pintarAvatar($('mi-avatar'), yo.nombre, yo.foto);
   aplicarVista();
   mostrar('vista-lista');
+  estadoNotif();
+  asegurarSuscripcion();
 }
 $('btn-salir').onclick = salir;
 
@@ -338,7 +340,8 @@ async function cargarLista() {
       const ult = c.ultimoMensaje
         ? (c.ultimoMensaje.tipo === 'texto' ? esc(c.ultimoMensaje.texto) : c.ultimoMensaje.tipo === 'sticker' ? '🌸 Sticker' : '📎 Adjunto')
         : 'Sin mensajes';
-      return `<div class="caso-item" role="button" tabindex="0" data-id="${c.id}">
+      return `<div class="caso-item${sinLeer ? ' sin-leer' : ''}" role="button" tabindex="0" data-id="${c.id}">
+        ${sinLeer ? '<span class="punto-rojo" title="Mensajes sin leer"></span>' : ''}
         ${avatarHTML(c.creadoraNombre, c.creadoraFoto)}
         <span class="caso-info">
           <span class="t">${esc(c.creadoraNombre)} ${c.creadoraTiktok ? `<span class="muted">${esc(c.creadoraTiktok)}</span>` : ''}</span>
@@ -353,6 +356,7 @@ async function cargarLista() {
         ${rolVista() === 'admin' ? `<button type="button" class="btn-opciones" data-opciones="${c.id}" title="Opciones del caso (eliminar)">⋮</button>` : ''}
       </div>`;
     }).join('');
+    actualizarInsignia(casos.reduce((a, c) => a + (yo.rol === 'admin' ? c.sinLeerAdmin : c.sinLeerCreadora), 0));
     for (const b of $('lista-casos').querySelectorAll('.caso-item')) {
       b.onclick = (e) => {
         /* El botón ⋮ tiene su propio manejo (abre el menú de eliminar):
@@ -1143,6 +1147,84 @@ async function revisarActualizacion() {
 revisarActualizacion();
 setInterval(revisarActualizacion, 90000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarActualizacion(); });
+
+/* ---------------- Notificaciones push (v24) ----------------
+   El botón «Activar notificaciones» pide el permiso (gesto de la
+   usuaria, como exige el teléfono) y suscribe ESTE teléfono a los
+   avisos: mensaje nuevo de una creadora → aviso a las
+   administradoras; respuesta del equipo → aviso a la creadora. En el
+   iPhone solo funciona con la app instalada en la pantalla de inicio.
+   Si el permiso ya estaba dado, asegurarSuscripcion() renueva la
+   suscripción en silencio al entrar (los teléfonos las rotan). */
+function urlBase64ToUint8Array(base64) {
+  const relleno = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + relleno).replace(/-/g, '+').replace(/_/g, '/');
+  const crudo = atob(b64);
+  const arr = new Uint8Array(crudo.length);
+  for (let i = 0; i < crudo.length; i++) arr[i] = crudo.charCodeAt(i);
+  return arr;
+}
+function pushSoportado() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+async function estadoNotif() {
+  const btn = $('btn-notif');
+  if (!btn) return;
+  if (!pushSoportado() || !yo) { btn.hidden = true; return; }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (Notification.permission === 'granted' && sub) { btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.textContent = Notification.permission === 'denied' ? '🔕 Notificaciones bloqueadas' : '🔔 Activar notificaciones';
+  } catch (e) { btn.hidden = false; }
+}
+async function asegurarSuscripcion() {
+  if (!pushSoportado() || !yo || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const d = await api('/api/push/vapid');
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(d.clave) });
+    }
+    await api('/api/push/suscribir', { method: 'POST', body: JSON.stringify(sub) });
+  } catch (e) { /* si falla, el botón sigue visible pa' reintentar */ }
+}
+$('btn-notif').onclick = async () => {
+  if (!pushSoportado()) { alert('Este teléfono o navegador no admite las notificaciones de la app. En iPhone funcionan con la app instalada en la pantalla de inicio.'); return; }
+  if (Notification.permission === 'denied') { alert('Las notificaciones están bloqueadas en los ajustes del teléfono. Actívalas en Ajustes → Notificaciones → Soporte DFA y vuelve a tocar el botón.'); return; }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { estadoNotif(); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const d = await api('/api/push/vapid');
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(d.clave) });
+    await api('/api/push/suscribir', { method: 'POST', body: JSON.stringify(sub) });
+    alert('Listo 🌸 Las notificaciones quedaron activadas en este teléfono.');
+    estadoNotif();
+  } catch (e) { alert('No se pudieron activar las notificaciones: ' + e.message); }
+};
+/* Número de mensajes sin leer sobre el ícono de la app instalada. */
+function actualizarInsignia(total) {
+  if (!('setAppBadge' in navigator)) return;
+  try {
+    if (total > 0) navigator.setAppBadge(total).catch(() => {});
+    else if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
+  } catch (e) { /* no todos los teléfonos lo admiten */ }
+}
+
+/* ---------------- Llamada del caso (v24) ----------------
+   Botón «Llamar» del chat: abre la sala privada de llamada de ESTE
+   caso (audio y video). La otra parte entra por el mismo botón desde
+   su app; la sala solo la conocen las dos partes del caso. */
+$('btn-llamar').onclick = () => {
+  if (casoActual && casoActual.sala) {
+    window.open('https://meet.jit.si/' + encodeURIComponent(casoActual.sala), '_blank');
+  } else {
+    alert('Este caso todavía no tiene sala de llamada. Sal del caso y vuelve a entrar.');
+  }
+};
 
 /* ---------------- Arranque ---------------- */
 (async () => {
