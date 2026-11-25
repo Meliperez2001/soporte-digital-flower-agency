@@ -34,7 +34,7 @@ const ESTADO_LABELS = {
   cerrado: 'Cerrado',
 };
 const GRAVEDADES = ['grave', 'no_grave', 'sin_clasificar'];
-const TIPOS_CASO = ['apelar', 'suspension', 'puntos', 'fondos', 'funciones', 'otro'];
+const TIPOS_CASO = ['apelar', 'suspension', 'puntos', 'fondos', 'funciones', 'otro', 'directo'];
 
 /* ------------------------------------------------------------------ */
 /* Utilidades                                                          */
@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v24';
+const APP_VERSION = 'v25';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
@@ -509,7 +509,7 @@ function guardarMensaje(req, res, datos) {
   if (cita) msg.respuesta = cita;
   db.messages.push(msg);
   caso.updatedAt = msg.createdAt;
-  if (caso.estado === 'nuevo' && req.user.rol === 'admin') caso.estado = 'esperando_evidencia';
+  if (caso.estado === 'nuevo' && req.user.rol === 'admin' && caso.tipo !== 'directo') caso.estado = 'esperando_evidencia';
   save();
   res.json({ mensaje: msg });
   /* Aviso push a la otra parte (v24). Nunca debe romper el envío: va
@@ -702,6 +702,41 @@ app.get('/api/admin/resumen', auth, soloAdmin, (req, res) => {
 /* degradar ni cambiar desde la app. Los permisos se verifican aquí,   */
 /* en el servidor: una creadora ni siquiera puede leer la lista.       */
 /* ------------------------------------------------------------------ */
+/* Conversación directa con una creadora (v25, pedido de Mell el
+   25/11/2026): la administradora puede buscar a cualquier creadora
+   registrada y escribirle SIN esperar a que ella abra un caso. La
+   conversación vive como un caso de tipo 'directo' de esa creadora:
+   reusa el chat, los no leídos y las notificaciones push (al primer
+   mensaje del equipo le llega el aviso al teléfono). Si ya hay una
+   conversación directa abierta con ella, se reusa esa. */
+app.post('/api/creadoras/:id/directo', auth, soloAdmin, (req, res) => {
+  const u = db.users.find((x) => x.id === Number(req.params.id) && x.rol !== 'admin');
+  if (!u) return res.status(404).json({ error: 'No se encontró a la creadora.' });
+  let caso = db.cases.find((c) => c.creadoraId === u.id && c.tipo === 'directo' && c.estado !== 'cerrado');
+  if (!caso) {
+    caso = {
+      id: nextId('caso'),
+      creadoraId: u.id,
+      creadoraNombre: u.nombre,
+      creadoraTiktok: u.tiktok || '',
+      titulo: 'Conversación directa con el equipo de soporte',
+      tipo: 'directo',
+      descripcion: 'Conversación iniciada por el equipo de soporte.',
+      yaApelo: '',
+      linkVideo: '',
+      pps: '',
+      estado: 'nuevo',
+      gravedad: 'sin_clasificar',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    caso.sala = 'dfa-soporte-' + caso.id + '-' + Math.random().toString(36).slice(2, 10);
+    db.cases.push(caso);
+    save();
+  }
+  res.json({ caso: casoResumen(caso) });
+});
+
 app.get('/api/admin/usuarios', auth, soloAdmin, (req, res) => {
   const usuarias = db.users
     .slice()
