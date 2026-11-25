@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v21';
+const APP_VERSION = 'v22';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
