@@ -345,13 +345,15 @@ h3{color:var(--purpura-oscuro)}
 .msg.ajeno{align-self:flex-start;background:#fff;border:1px solid var(--borde);border-bottom-left-radius:6px}
 .msg.sticker{background:transparent;box-shadow:none;font-size:52px;padding:2px}
 .msg video{max-width:100%;border-radius:12px;display:block}
-/* Fotos del chat: COMPLETAS, a todo el ancho de la burbuja y con su
-   proporción natural — sin max-height, sin object-fit que recorte y
-   sin caja con scroll interno (antes una captura larga se veía
-   encerrada en un cuadrito recortado y había que moverla por dentro).
-   Al tocarla se abre el visor a pantalla completa. */
+/* Fotos del chat (v19, pedido de Mell el 25/11/2026): MINIATURAS
+   pequeñas dentro de la burbuja — la foto entera, con su proporción,
+   contenida en un máximo de 230×230 px, sin recortar (object-fit:
+   contain sobre el tamaño natural reducido). Antes se veían a todo el
+   ancho de la burbuja y una captura larga se comía la pantalla entera
+   del caso. El archivo original no se toca: al tocar la miniatura se
+   abre el visor a pantalla completa con la foto completa. */
 .msg img.foto-msg{
-  width:100%;height:auto;max-height:none;object-fit:contain;
+  width:auto;height:auto;max-width:230px;max-height:230px;object-fit:contain;
   border-radius:12px;display:block;cursor:zoom-in;
 }
 /* Visor de fotos a pantalla completa: la imagen entera, contenida en
