@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -645,8 +645,8 @@ async function cargarMensajes(bajar) {
 }
 
 /* ---------------- Visor de fotos a pantalla completa ----------------
-   Las fotos del chat se ven completas en la burbuja; al tocarlas se
-   abren aquí, enteras y con su proporción. Doble toque (o doble clic)
+   Las fotos del chat se ven como miniaturas pequeñas en la burbuja
+   (v19); al tocarlas se abren aquí, enteras y con su proporción. Doble toque (o doble clic)
    acerca la imagen y se puede recorrer arrastrando; ✕ o tocar el
    fondo la cierra. Antes la foto era un enlace que abría el archivo
    suelto fuera del chat, en una vista pequeña donde había que mover
