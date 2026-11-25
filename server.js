@@ -424,6 +424,27 @@ app.post('/api/cases/:id/messages', auth, (req, res) => {
   guardarMensaje(req, res, { tipo: 'texto', texto: String(texto).trim().slice(0, 4000) });
 });
 
+/** Reacciones a un mensaje (v20, pedido de Mell el 25/11/2026): tocar de
+    nuevo la misma reacción la quita (toggle). Solo se aceptan ❤️ y 😂.
+    Se guardan en el propio mensaje como { emoji: [ids de usuario] } y
+    viajan con la lista de mensajes, así ambas partes las ven. */
+const REACCIONES_OK = ['❤️', '😂'];
+app.post('/api/cases/:id/messages/:mid/reaccion', auth, (req, res) => {
+  const caso = getCasoVisible(req, res);
+  if (!caso) return;
+  const emoji = String((req.body || {}).emoji || '');
+  if (!REACCIONES_OK.includes(emoji)) return res.status(400).json({ error: 'Reacción no válida.' });
+  const msg = db.messages.find((m) => m.id === Number(req.params.mid) && m.casoId === caso.id && !m.eliminado);
+  if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado.' });
+  if (!msg.reacciones || typeof msg.reacciones !== 'object') msg.reacciones = {};
+  const lista = Array.isArray(msg.reacciones[emoji]) ? msg.reacciones[emoji] : [];
+  const i = lista.indexOf(req.user.id);
+  if (i === -1) lista.push(req.user.id); else lista.splice(i, 1);
+  if (lista.length) msg.reacciones[emoji] = lista; else delete msg.reacciones[emoji];
+  save();
+  res.json({ reacciones: msg.reacciones });
+});
+
 /** Eliminar un mensaje PARA TODOS: lo puede borrar quien lo escribió o
     la administradora. El mensaje desaparece por completo del caso y deja
     de servirse a ambas partes (sin burbuja de "mensaje eliminado"), y se
