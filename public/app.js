@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -1262,16 +1262,25 @@ function actualizarInsignia(total) {
   } catch (e) { /* no todos los teléfonos lo admiten */ }
 }
 
-/* ---------------- Llamada del caso (v24) ----------------
+/* ---------------- Llamada del caso (v24, aviso en v26) ----------------
    Botón «Llamar» del chat: abre la sala privada de llamada de ESTE
-   caso (audio y video). La otra parte entra por el mismo botón desde
-   su app; la sala solo la conocen las dos partes del caso. */
+   caso (audio y video) Y avisa a la otra parte (v26): el servidor deja
+   un mensaje en el chat y le manda una notificación de llamada que al
+   tocarla abre este caso; la otra parte toca «Llamar» y entra a la
+   misma sala. Sin ese aviso la llamada no le entraba a nadie, porque
+   la sala solo se abría en el teléfono de quien llamaba.
+   La sala se abre PRIMERO, dentro del gesto del toque, pa' que el
+   navegador no la bloquee como ventana emergente; el aviso va detrás. */
 $('btn-llamar').onclick = () => {
-  if (casoActual && casoActual.sala) {
-    window.open('https://meet.jit.si/' + encodeURIComponent(casoActual.sala), '_blank');
-  } else {
+  if (!casoActual || !casoActual.sala) {
     alert('Este caso todavía no tiene sala de llamada. Sal del caso y vuelve a entrar.');
+    return;
   }
+  if (bloqueadoPorPreview()) return;
+  window.open('https://meet.jit.si/' + encodeURIComponent(casoActual.sala), '_blank');
+  api(`/api/cases/${casoActual.id}/llamar`, { method: 'POST', body: '{}' })
+    .then(() => cargarMensajes(true))
+    .catch(() => { /* la sala ya se abrió; el aviso se puede reintentar tocando de nuevo */ });
 };
 
 /* ---------------- Arranque ---------------- */
@@ -1280,5 +1289,15 @@ $('btn-llamar').onclick = () => {
   try {
     const d = await api('/api/me');
     entrar({ token, user: d.user });
+    /* Apertura directa de un caso (v26): al tocar una notificación (de
+       mensaje o de llamada) la app llega con ?caso=NN y entra directo
+       a ese chat. El parámetro se limpia de la dirección pa' que un
+       refresco no vuelva a abrirlo. */
+    const casoParam = new URLSearchParams(location.search).get('caso');
+    if (casoParam) {
+      history.replaceState(null, '', location.pathname);
+      const idCaso = Number(casoParam);
+      if (idCaso) abrirCaso(idCaso);
+    }
   } catch (e) { salir(); }
 })();
