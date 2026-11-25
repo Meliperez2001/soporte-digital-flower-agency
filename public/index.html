@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Soporte DFA">
-<link rel="stylesheet" href="/styles.css?v=24">
+<link rel="stylesheet" href="/styles.css?v=25">
 </head>
 <body>
 <header class="topbar">
@@ -79,6 +79,7 @@
     <h2 id="lista-titulo">Mis casos</h2>
     <button id="btn-nuevo-caso" class="btn btn-primary">+ Abrir un caso</button>
     <button id="btn-usuarias" class="btn btn-soft" hidden>👥 Administradoras</button>
+    <button id="btn-directorio" class="btn btn-soft" hidden>✉️ Escribir a una creadora</button>
   </section>
   <div id="admin-resumen" class="resumen" hidden></div>
   <div id="filtros-estado" class="filtros" hidden></div>
@@ -86,6 +87,12 @@
     <h3>Administradoras</h3>
     <p class="muted small">Las administradoras ven <strong>todos los casos</strong> de la agencia, igual que tú, y pueden cambiar estados, eliminar casos y mensajes. Si haces administradora a una creadora, verá el panel completo la próxima vez que entre a la app (o al volver a abrirla).</p>
     <div id="lista-usuarias" class="lista-usuarias"></div>
+  </section>
+  <section id="panel-directorio" class="card" hidden>
+    <h3>Escribir a una creadora</h3>
+    <p class="muted small">Busca a la creadora por su nombre o su @ de TikTok y toca <strong>Escribir</strong> pa' abrir una conversación directa con ella, sin esperar a que ella abra un caso. Tu mensaje le llega con notificación a su teléfono si las tiene activadas.</p>
+    <input type="search" id="buscar-creadora" placeholder="Buscar por nombre o @ de TikTok…">
+    <div id="lista-creadoras" class="lista-usuarias"></div>
   </section>
   <div id="lista-casos" class="lista-casos"></div>
   <p id="lista-vacia" class="muted" hidden>Todavía no hay casos aquí.</p>
@@ -266,6 +273,6 @@
   <small id="version-pie" class="version-sello"></small>
 </footer>
 
-<script src="/app.js?v=24"></script>
+<script src="/app.js?v=25"></script>
 </body>
 </html>
