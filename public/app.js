@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -1084,6 +1084,38 @@ $('btn-instalar').onclick = async () => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+/* ---------------- Actualizador automático (v21) ----------------
+   Pedido de Mell (25/11/2026): la app va a seguir creciendo y no se le
+   puede estar pidiendo a cada creadora que la quite del inicio y la
+   vuelva a poner en cada cambio. La copia instalada pregunta al
+   servidor su versión al abrir, al volver a primer plano y cada 90
+   segundos; si el servidor va por otra versión, la app se recarga
+   sola y entra la nueva (la carcasa se sirve sin caché y con los
+   assets versionados, así que la recarga lo trae todo fresco).
+   Guarda anti-bucle: una sola recarga por versión en cada sesión.
+   Y no recarga encima de la usuaria: si está escribiendo un mensaje
+   o viendo una foto en el visor, espera a la próxima revisión. */
+async function revisarActualizacion() {
+  try {
+    const r = await fetch('/api/version', { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.version || d.version === APP_VERSION) return;
+    if (sessionStorage.getItem('dfa-upd') === d.version) return;
+    const escribiendo = (($('input-texto') && $('input-texto').value.trim()) || visorAbierto());
+    if (escribiendo) return;
+    sessionStorage.setItem('dfa-upd', d.version);
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update().catch(() => {});
+    }
+    location.reload();
+  } catch (e) { /* sin red: se reintenta en la próxima revisión */ }
+}
+revisarActualizacion();
+setInterval(revisarActualizacion, 90000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) revisarActualizacion(); });
 
 /* ---------------- Arranque ---------------- */
 (async () => {
