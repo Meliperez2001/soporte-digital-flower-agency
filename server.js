@@ -192,8 +192,83 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v24';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
+
+/* ------------------------------------------------------------------ */
+/* Notificaciones push (v24, pedido de Mell el 25/11/2026)             */
+/*                                                                     */
+/* Mell no se enteraba de los mensajes nuevos: sin notificación en el  */
+/* teléfono, la única forma de saber era abrir la app de casualidad.   */
+/* Con Web Push, cuando una creadora escribe le llega la notificación  */
+/* a las administradoras aunque la app esté cerrada, y cuando el       */
+/* equipo responde le llega a la creadora. Las claves VAPID se         */
+/* generan una sola vez y quedan en la base de datos del servidor      */
+/* (NUNCA en el repo, que es público). Las suscripciones de cada       */
+/* teléfono viven en db.pushSubs; las que el servicio devuelve como    */
+/* muertas (404/410) se borran solas.                                  */
+/* ------------------------------------------------------------------ */
+let webPush = null;
+try { webPush = require('web-push'); } catch (e) { webPush = null; }
+if (!db.pushSubs) db.pushSubs = [];
+function clavesPush() {
+  if (!webPush) return null;
+  if (!db.config) db.config = {};
+  if (!db.config.vapid) {
+    const keys = webPush.generateVAPIDKeys();
+    db.config.vapid = { publica: keys.publicKey, privada: keys.privateKey };
+    save();
+  }
+  return db.config.vapid;
+}
+function pushListo() {
+  const k = clavesPush();
+  if (!k) return false;
+  webPush.setVapidDetails('mailto:soporte@digitalflower.agency', k.publica, k.privada);
+  return true;
+}
+app.get('/api/push/vapid', auth, (req, res) => {
+  if (!pushListo()) return res.status(503).json({ error: 'Las notificaciones no están disponibles en el servidor.' });
+  res.json({ clave: db.config.vapid.publica });
+});
+app.post('/api/push/suscribir', auth, (req, res) => {
+  const sub = req.body || {};
+  if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+    return res.status(400).json({ error: 'Suscripción incompleta.' });
+  }
+  db.pushSubs = db.pushSubs.filter((s) => s.endpoint !== sub.endpoint);
+  db.pushSubs.push({ userId: req.user.id, endpoint: sub.endpoint, keys: sub.keys, createdAt: new Date().toISOString() });
+  save();
+  res.json({ ok: true });
+});
+app.post('/api/push/desuscribir', auth, (req, res) => {
+  const { endpoint } = req.body || {};
+  db.pushSubs = db.pushSubs.filter((s) => !(s.endpoint === endpoint && s.userId === req.user.id));
+  save();
+  res.json({ ok: true });
+});
+function enviarPush(userIds, payload) {
+  if (!userIds.length || !pushListo()) return;
+  const data = JSON.stringify(payload);
+  for (const s of db.pushSubs.filter((x) => userIds.includes(x.userId))) {
+    webPush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, data).catch((err) => {
+      if (err && (err.statusCode === 404 || err.statusCode === 410)) {
+        db.pushSubs = db.pushSubs.filter((x) => x.endpoint !== s.endpoint);
+        save();
+      }
+    });
+  }
+}
+function idsAdministradoras() {
+  return db.users.filter((u) => u.rol === 'admin').map((u) => u.id);
+}
+function extractoPush(msg) {
+  if (msg.tipo === 'texto') return String(msg.texto || '').slice(0, 90);
+  if (msg.tipo === 'sticker') return 'Te enviaron un sticker ' + String(msg.texto || '');
+  if (msg.tipo === 'audio') return 'Te enviaron una nota de voz 🎙️';
+  if (msg.tipo === 'archivo') return 'Te enviaron un adjunto 📎 ' + String(msg.nombreArchivo || '');
+  return 'Tienes un mensaje nuevo';
+}
 
 /* ------------------------------------------------------------------ */
 /* Mi perfil: nombre y foto                                            */
@@ -279,6 +354,10 @@ app.post('/api/cases', auth, (req, res) => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+  /* Sala de llamada del caso (v24): nombre único e impredecible pa' el
+     botón «Llamar» del chat; la sala es por caso y la conocen solo las
+     dos partes. */
+  caso.sala = 'dfa-soporte-' + caso.id + '-' + Math.random().toString(36).slice(2, 10);
   db.cases.push(caso);
   // El primer mensaje del chat es la descripción del caso
   db.messages.push({
@@ -295,6 +374,15 @@ app.post('/api/cases', auth, (req, res) => {
   });
   save();
   res.json({ caso: casoResumen(caso) });
+  /* Aviso push a las administradoras del caso nuevo (v24). */
+  try {
+    enviarPush(idsAdministradoras(), {
+      title: 'Soporte Digital Flower Agency',
+      body: `Nuevo caso de ${req.user.nombre}: ${caso.titulo}`,
+      casoId: caso.id,
+      sinLeer: db.messages.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length,
+    });
+  } catch (e) { /* el aviso es un extra */ }
 });
 
 app.get('/api/cases', auth, (req, res) => {
@@ -310,6 +398,8 @@ app.get('/api/cases', auth, (req, res) => {
 app.get('/api/cases/:id', auth, (req, res) => {
   const caso = getCasoVisible(req, res);
   if (!caso) return;
+  /* Los casos viejos no traen sala de llamada: se les crea al abrirlos. */
+  if (!caso.sala) { caso.sala = 'dfa-soporte-' + caso.id + '-' + Math.random().toString(36).slice(2, 10); save(); }
   res.json({ caso: { ...caso, creadoraFoto: fotoDe(caso.creadoraId), evidencia: evidenciaDe(caso) } });
 });
 
@@ -422,6 +512,27 @@ function guardarMensaje(req, res, datos) {
   if (caso.estado === 'nuevo' && req.user.rol === 'admin') caso.estado = 'esperando_evidencia';
   save();
   res.json({ mensaje: msg });
+  /* Aviso push a la otra parte (v24). Nunca debe romper el envío: va
+     envuelto y después de responder. Si escribe la creadora, el aviso
+     va a las administradoras con el total de mensajes sin leer; si
+     escribe el equipo, va a la creadora dueña del caso. */
+  try {
+    if (msg.autor === 'creadora') {
+      const sinLeer = db.messages.filter((m) => m.autor === 'creadora' && !m.leidoAdmin && !m.eliminado).length;
+      enviarPush(idsAdministradoras(), {
+        title: 'Soporte Digital Flower Agency',
+        body: `${msg.autorNombre}: ${extractoPush(msg)}`,
+        casoId: caso.id, sinLeer,
+      });
+    } else {
+      const sinLeer = db.messages.filter((m) => m.casoId === caso.id && m.autor !== 'creadora' && !m.leidoCreadora && !m.eliminado).length;
+      enviarPush([caso.creadoraId], {
+        title: 'Soporte Digital Flower Agency',
+        body: `Equipo de soporte: ${extractoPush(msg)}`,
+        casoId: caso.id, sinLeer,
+      });
+    }
+  } catch (e) { /* el aviso es un extra; el mensaje ya quedó guardado */ }
   return msg;
 }
 
