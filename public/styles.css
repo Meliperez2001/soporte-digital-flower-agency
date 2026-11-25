@@ -387,13 +387,20 @@ h3{color:var(--purpura-oscuro)}
 /* Fila de emojis del menú de opciones del mensaje (presión larga, clic
    derecho o botón ⋮): corazón y carita de risa, grandes y tocables. */
 .menu-reacciones{
-  display:flex;gap:4px;padding:4px 6px 6px;margin-bottom:4px;
+  display:flex;gap:2px;flex-wrap:wrap;padding:4px 6px 6px;margin-bottom:4px;
   border-bottom:1px solid var(--borde);
 }
 .menu-reacciones button{
-  font-size:25px;line-height:1.2;padding:4px 10px;border-radius:12px;text-align:center;
+  font-size:23px;line-height:1.2;padding:4px 7px;border-radius:12px;text-align:center;
 }
 .menu-reacciones button:hover{background:var(--rosa-suave)}
+/* Campo del botón ➕ (v23): la usuaria toca, se le abre su teclado de
+   emojis y el primero que elija queda como reacción. */
+.reacc-input{
+  font:inherit;font-size:16px;width:100%;padding:9px 10px;margin:2px 0 6px;
+  border:1px solid var(--borde);border-radius:10px;
+  background:var(--fondo);color:var(--texto);
+}
 /* Visor de fotos a pantalla completa: la imagen entera, contenida en
    la pantalla con su proporción; con doble toque se acerca (zoom) y se
    puede recorrer arrastrando dentro del propio visor. */
