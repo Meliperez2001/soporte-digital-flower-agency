@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -916,9 +916,15 @@ menuMsg.className = 'msg-menu';
 menuMsg.hidden = true;
 menuMsg.innerHTML = `
   <div class="menu-reacciones">
+    <button type="button" data-reacc="👍" title="Me gusta">👍</button>
     <button type="button" data-reacc="❤️" title="Me encanta">❤️</button>
     <button type="button" data-reacc="😂" title="Me divierte">😂</button>
+    <button type="button" data-reacc="😮" title="Me asombra">😮</button>
+    <button type="button" data-reacc="😢" title="Me entristece">😢</button>
+    <button type="button" data-reacc="🙏" title="Gracias">🙏</button>
+    <button type="button" data-reacc-mas="1" title="Otro emoji de tu teclado">➕</button>
   </div>
+  <input id="reacc-input" class="reacc-input" type="text" placeholder="Toca aquí y elige un emoji de tu teclado…" autocomplete="off" hidden>
   <button type="button" data-acc="responder">↩️ Responder</button>
   <button type="button" data-acc="eliminar">🗑️ Eliminar</button>`;
 document.body.appendChild(menuMsg);
@@ -938,23 +944,32 @@ function abrirMenuMsg(m, x, y) {
   menuAbiertoEn = Date.now();
   menuMsg.querySelector('[data-acc="eliminar"]').hidden = !puedeEliminar(m);
   menuMsg.hidden = false;
-  const ancho = 190, alto = 175;
+  const ancho = 250, alto = 230;
   menuMsg.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
   menuMsg.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
 }
+async function enviarReaccion(mid, emoji) {
+  cerrarMenuMsg();
+  try {
+    await api(`/api/cases/${casoActual.id}/messages/${mid}/reaccion`, { method: 'POST', body: JSON.stringify({ emoji }) });
+    cargarMensajes(false);
+  } catch (err) { alert(err.message); }
+}
 menuMsg.addEventListener('click', async (e) => {
-  /* Reacciones (v20): la fila de emojis va encima de las opciones; al
-     tocar uno se pone la reacción (o se quita si ya la tenía) y el menú
-     se cierra. La lista se repinta sola al volver el sondeo, y también
-     se fuerza aquí pa' que se vea al momento. */
+  /* Reacciones: la fila de emojis va encima de las opciones; al tocar
+     uno se pone la reacción (o se quita si ya la tenía) y el menú se
+     cierra. La lista se repinta sola al volver el sondeo, y también se
+     fuerza aquí pa' que se vea al momento. Desde la v23 la fila trae
+     las rápidas tipo WhatsApp y un botón ➕ que abre el teclado de
+     emojis del teléfono pa' elegir cualquier otro. */
   const rb = e.target.closest('button[data-reacc]');
-  if (rb && menuMsgId != null) {
-    const mid = menuMsgId;
-    cerrarMenuMsg();
-    try {
-      await api(`/api/cases/${casoActual.id}/messages/${mid}/reaccion`, { method: 'POST', body: JSON.stringify({ emoji: rb.dataset.reacc }) });
-      cargarMensajes(false);
-    } catch (err) { alert(err.message); }
+  if (rb && menuMsgId != null) { enviarReaccion(menuMsgId, rb.dataset.reacc); return; }
+  const mas = e.target.closest('button[data-reacc-mas]');
+  if (mas && menuMsgId != null) {
+    const inp = menuMsg.querySelector('#reacc-input');
+    inp.hidden = false;
+    inp.value = '';
+    inp.focus();
     return;
   }
   const b = e.target.closest('button[data-acc]');
@@ -973,6 +988,18 @@ menuMsg.addEventListener('click', async (e) => {
       cargarMensajes(false);
     } catch (err) { alert(err.message); }
   }
+});
+/* El campo del botón ➕: en cuanto la usuaria elige un emoji de su
+   teclado, se toma el primer grafema y se manda como reacción. */
+menuMsg.addEventListener('input', (e) => {
+  if (e.target.id !== 'reacc-input' || menuMsgId == null) return;
+  const v = e.target.value.trim();
+  if (!v) return;
+  let emoji = v;
+  try { emoji = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(v)][0].segment; }
+  catch (err) { emoji = [...v][0]; }
+  if (!emoji || /[\p{L}\p{N}\s]/u.test(emoji)) return;
+  enviarReaccion(menuMsgId, emoji);
 });
 document.addEventListener('click', (e) => {
   if (menuMsg.hidden || menuMsg.contains(e.target)) return;
