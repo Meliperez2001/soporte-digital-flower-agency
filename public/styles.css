@@ -21,6 +21,13 @@
 [hidden]{display:none !important}
 html{height:100%}
 html,body{margin:0;padding:0}
+/* v20 (pedido de Mell el 25/11/2026): la app instalada se comporta como
+   aplicación y no como página web: sin desborde horizontal y sin que la
+   carcasa se mueva de lado. El zoom de pellizco y de doble toque se
+   bloquea en app.js (gesturestart / touchmove), respetando el visor de
+   fotos, que sí usa el pellizco pa' acercar. */
+html,body{overflow-x:hidden}
+body{touch-action:manipulation;overscroll-behavior:none}
 body{
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   background:linear-gradient(180deg,#f3e3fa 0%,var(--fondo) 220px);
@@ -336,11 +343,16 @@ h3{color:var(--purpura-oscuro)}
      ancho y sin caja con borde que la recorte a un cuadradito. */
   flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
-  background:rgba(255,255,255,.65);
+  /* v20 (pedido de Mell el 25/11/2026): fondo del chat NEGRO, porque el
+     blanco le molesta la vista. Las burbujas quedan como estaban: la
+     propia en púrpura y la ajena en blanco, que sobre negro resaltan. */
+  background:#000;
 }
-.msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:15px;line-height:1.35;box-shadow:0 2px 8px rgba(117,29,149,.08)}
-.msg .autor{font-size:12px;font-weight:700;margin-bottom:3px;opacity:.8}
-.msg .hora{font-size:11px;opacity:.6;margin-top:4px;text-align:right}
+/* v20: letra del chat un poco más grande (Mell: «están muy pequeñitas»):
+   el texto del mensaje sube de 15 a 17 px, y autor y hora un punto. */
+.msg{max-width:78%;padding:10px 13px;border-radius:18px;font-size:17px;line-height:1.4;box-shadow:0 2px 8px rgba(117,29,149,.08)}
+.msg .autor{font-size:13px;font-weight:700;margin-bottom:3px;opacity:.8}
+.msg .hora{font-size:12px;opacity:.6;margin-top:4px;text-align:right}
 .msg.propio{align-self:flex-end;background:var(--purpura);color:#fff;border-bottom-right-radius:6px}
 .msg.ajeno{align-self:flex-start;background:#fff;border:1px solid var(--borde);border-bottom-left-radius:6px}
 .msg.sticker{background:transparent;box-shadow:none;font-size:52px;padding:2px}
@@ -356,6 +368,27 @@ h3{color:var(--purpura-oscuro)}
   width:auto;height:auto;max-width:230px;max-height:230px;object-fit:contain;
   border-radius:12px;display:block;cursor:zoom-in;
 }
+/* Reacciones (v20): pastillas con el emoji y su conteo, pegadas al final
+   de la burbuja; la reacción propia va resaltada en púrpura (y en
+   blanco dentro de la burbuja propia, que ya es púrpura). */
+.reacciones{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.reaccion{
+  font-size:13px;line-height:1.5;padding:1px 8px;border-radius:999px;
+  background:#f3e6f8;border:1px solid var(--borde);color:var(--texto);
+}
+.reaccion.mia{background:var(--purpura);border-color:var(--purpura);color:#fff;font-weight:700}
+.msg.propio .reaccion{background:rgba(255,255,255,.25);border-color:transparent;color:#fff}
+.msg.propio .reaccion.mia{background:#fff;color:var(--purpura)}
+/* Fila de emojis del menú de opciones del mensaje (presión larga, clic
+   derecho o botón ⋮): corazón y carita de risa, grandes y tocables. */
+.menu-reacciones{
+  display:flex;gap:4px;padding:4px 6px 6px;margin-bottom:4px;
+  border-bottom:1px solid var(--borde);
+}
+.menu-reacciones button{
+  font-size:25px;line-height:1.2;padding:4px 10px;border-radius:12px;text-align:center;
+}
+.menu-reacciones button:hover{background:var(--rosa-suave)}
 /* Visor de fotos a pantalla completa: la imagen entera, contenida en
    la pantalla con su proporción; con doble toque se acerca (zoom) y se
    puede recorrer arrastrando dentro del propio visor. */
@@ -386,7 +419,11 @@ h3{color:var(--purpura-oscuro)}
      superior que lo separa de los mensajes. La vista previa de respuesta
      («Respondiendo a…») y los paneles de stickers/adjuntos viven dentro
      de este mismo bloque fijo, justo encima de la fila de escribir. */
-  flex:none;background:var(--tarjeta);border-top:1px solid var(--borde);
+  /* v20: el composer acompaña al fondo negro del chat: superficie
+     oscura y la barra de escribir en tono púrpura oscuro con letra
+     blanca. Los paneles que se abren dentro (stickers, adjuntos,
+     respuesta) conservan sus colores claros y se leen bien encima. */
+  flex:none;background:#17111f;border-top:1px solid #3a2a4d;
   padding:10px 10px calc(10px + env(safe-area-inset-bottom));
 }
 .input-row{display:flex;gap:8px;align-items:flex-end}
@@ -396,13 +433,14 @@ h3{color:var(--purpura-oscuro)}
    micrófono/enviar. */
 .barra-escribir{
   flex:1;min-width:0;display:flex;align-items:flex-end;gap:2px;
-  background:#fff;border:1px solid var(--borde);border-radius:24px;
+  background:#251b31;border:1px solid #3d2c4f;border-radius:24px;
   padding:5px 6px 5px 14px;box-shadow:0 2px 8px rgba(117,29,149,.06);
 }
 .barra-escribir textarea{
   flex:1;min-width:0;resize:none;border:none;background:transparent;
-  padding:8px 0;font:inherit;max-height:120px;outline:none;color:var(--texto);
+  padding:8px 0;font:inherit;font-size:16px;max-height:120px;outline:none;color:#fff;
 }
+.barra-escribir textarea::placeholder{color:#b7a6cc}
 /* Iconito de stickers dentro de la barra, en la esquina del campo. */
 .btn-sticker-in{
   flex:none;background:none;border:none;cursor:pointer;
@@ -414,7 +452,7 @@ h3{color:var(--purpura-oscuro)}
 .btn-enviar{background:var(--purpura);color:#fff;border-color:var(--purpura);font-size:16px}
 .btn-enviar:hover{background:var(--purpura-oscuro)}
 /* Botón «+» del composer: abre el menú de adjuntos (Foto, Video, Archivo). */
-.btn-mas{font-size:26px;font-weight:400;line-height:1;color:var(--purpura-oscuro)}
+.btn-mas{font-size:26px;font-weight:400;line-height:1;color:#d9c7ee}
 /* Panel del menú «+» (tipo WhatsApp): se abre encima de la barra de
    escribir, con una cuadrícula de botones grandes — ícono en círculo y
    nombre debajo — en los colores de la app (púrpura/rosado). */
