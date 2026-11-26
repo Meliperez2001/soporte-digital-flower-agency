@@ -568,3 +568,7 @@ h1,h2,h3{color:#e9d7f8}
 .msg.ajeno .cita strong{color:var(--purpura-oscuro)}
 .msg.ajeno .doc{background:#f3e6f8}
 .msg.propio .doc{background:#f1e4f9;color:var(--purpura-oscuro)}
+
+/* Enlaces tocables dentro de los mensajes del chat (v27). */
+.msg a.link-msg{color:inherit;text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.msg.ajeno a.link-msg{color:var(--purpura-oscuro)}
