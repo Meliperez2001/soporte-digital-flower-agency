@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v27';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -75,6 +75,18 @@ function avatarHTML(nombre, foto, clase) {
 }
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+/* Convierte los enlaces de un texto YA escapado en enlaces tocables que se
+   abren al tocarlos (pedido de Mell, 26/11/2026: los links de los videos que
+   mandan las creadoras no se podían tocar en el chat). */
+function linkify(htmlEscapado) {
+  return String(htmlEscapado || '').replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+|(?:tiktok\.com|vm\.tiktok\.com|shop\.tiktok\.com|discord\.gg|drive\.google\.com|docs\.google\.com|instagram\.com|youtube\.com|youtu\.be)\/[^\s<]*)/g, (u) => {
+    let cola = '';
+    let limpio = u;
+    while (/[.,;:!?)\]]$/.test(limpio)) { cola = limpio.slice(-1) + cola; limpio = limpio.slice(0, -1); }
+    const href = /^https?:\/\//.test(limpio) ? limpio : 'https://' + limpio;
+    return `<a class="link-msg" href="${href}" target="_blank" rel="noopener noreferrer">${limpio}</a>${cola}`;
+  });
 }
 function hora(iso) {
   try {
@@ -684,14 +696,14 @@ async function cargarMensajes(bajar) {
       const lado = mio ? 'propio' : 'ajeno';
       const clase = m.tipo === 'sticker' ? `msg sticker ${lado}` : `msg ${lado}`;
       let cuerpo = '';
-      if (m.tipo === 'texto') cuerpo = esc(m.texto).replace(/\n/g, '<br>');
+      if (m.tipo === 'texto') cuerpo = linkify(esc(m.texto)).replace(/\n/g, '<br>');
       else if (m.tipo === 'sticker') cuerpo = esc(m.texto);
       else if (m.tipo === 'audio') cuerpo = `<audio controls src="${urlAdjunto(m)}"></audio>`;
       else if ((m.mime || '').startsWith('image/')) cuerpo = `<img class="foto-msg" src="${urlAdjunto(m)}" alt="foto">`;
       else if ((m.mime || '').startsWith('video/')) cuerpo = `<video controls src="${urlAdjunto(m)}"></video>`;
       else cuerpo = `<a class="doc" href="${urlAdjunto(m)}" target="_blank">📄 ${esc(m.nombreArchivo || 'Documento')}</a>`;
       const cita = m.respuesta
-        ? `<div class="cita"><strong>${esc(m.respuesta.autorNombre || '')}</strong><span>${esc(m.respuesta.texto || '')}</span></div>`
+        ? `<div class="cita"><strong>${esc(m.respuesta.autorNombre || '')}</strong><span>${linkify(esc(m.respuesta.texto || ''))}</span></div>`
         : '';
       return `<div class="msg-row ${mio ? 'mio' : 'ajeno'}" data-id="${m.id}">
         ${avatarHTML(m.autorNombre, m.autorFoto, 'avatar-msg')}
