@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v27';
+const APP_VERSION = 'v28';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -787,8 +787,8 @@ $('btn-cancelar-respuesta').onclick = cancelarRespuesta;
 
 /* Como en WhatsApp: con el campo vacío se ven la camarita y el micrófono;
    en cuanto se escribe algo, los dos se reemplazan por el botón de enviar
-   (➤). Mientras se está grabando, el micrófono se queda visible: la nota
-   se envía sola al soltarlo. */
+   (➤). Mientras se está grabando, el micrófono se queda visible y la
+   barra de grabación muestra sus propios controles (enviar / cancelar). */
 function actualizarBtnEnviar() {
   const escribiendo = $('input-texto').value.trim().length > 0;
   const grabandoAhora = typeof recorder !== 'undefined' && Boolean(recorder) && recorder.state === 'recording';
@@ -866,22 +866,25 @@ for (const [menuId, inputId] of [['menu-foto', 'input-foto'], ['menu-video', 'in
   };
 }
 
-/* Notas de voz — como en WhatsApp: mantener APRETADO el micrófono para
-   grabar y SOLTAR para que la nota se envíe sola. Funciona con el dedo y
-   con el mouse (pointer events). Un toque accidental muy corto (menos de
-   1 segundo) se descarta en vez de mandar un audio vacío. */
+/* Notas de voz — como en WhatsApp: TOCAR el micrófono una vez para
+   empezar a grabar, SIN mantenerlo apretado. Mientras se graba, la barra
+   de grabación muestra el tiempo y dos controles claros: ➤ para detener
+   y enviar la nota, y 🗑️ para cancelarla y borrarla sin enviarla. Un
+   toque accidental muy corto (menos de 1 segundo) se descarta en vez de
+   mandar un audio vacío. */
 let recorder = null, chunks = [];
-let grabInicio = 0;         // cuándo arrancó la grabación (tiempo y mínimo de 1 s)
-let grabTimer = null;       // intervalo que pinta el tiempo en el indicador
-let grabIniciando = false;  // getUserMedia en curso, aún no se está grabando
-let soltarAlGrabar = false; // soltó el botón antes de que arrancara la grabación
+let grabInicio = 0;           // cuándo arrancó la grabación (tiempo y mínimo de 1 s)
+let grabTimer = null;         // intervalo que pinta el tiempo en el indicador
+let grabIniciando = false;    // getUserMedia en curso, aún no se está grabando
+let descartarGrab = false;    // cancelar la nota: al detenerse NO se envía
+let cancelarAlGrabar = false; // tocó cancelar mientras se pedía el micrófono
 
 function fmtTiempoGrab(ms) {
   const s = Math.floor(ms / 1000);
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 function pintarGrabando() {
-  $('grabando').textContent = '🔴 Grabando ' + fmtTiempoGrab(Date.now() - grabInicio) + ' · Suelta el micrófono para enviar';
+  $('grabando-tiempo').textContent = '🔴 Grabando ' + fmtTiempoGrab(Date.now() - grabInicio);
 }
 function limpiarIndicadorGrabacion() {
   if (grabTimer) { clearInterval(grabTimer); grabTimer = null; }
@@ -893,7 +896,8 @@ async function empezarGrabacion() {
   if (bloqueadoPorPreview()) return;
   if (recorder || grabIniciando) return;
   grabIniciando = true;
-  soltarAlGrabar = false;
+  descartarGrab = false;
+  cancelarAlGrabar = false;
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -909,10 +913,14 @@ async function empezarGrabacion() {
     stream.getTracks().forEach((t) => t.stop());
     const duracion = Date.now() - grabInicio;
     const rec = recorder;
+    const descartar = descartarGrab;
     recorder = null;
+    descartarGrab = false;
     limpiarIndicadorGrabacion();
     actualizarBtnEnviar();
-    /* Toque accidental (soltó enseguida): no se manda un audio vacío. */
+    /* Canceló con 🗑️: la nota se borra y no se envía nada. */
+    if (descartar) return;
+    /* Toque accidental (grabó menos de 1 s): no se manda un audio vacío. */
     if (duracion < 1000) return;
     /* El nombre y el tipo salen del formato REAL de la grabación: en el
        iPhone MediaRecorder produce MP4/AAC y en Chrome WebM. Antes el
@@ -944,29 +952,35 @@ async function empezarGrabacion() {
   pintarGrabando();
   grabTimer = setInterval(pintarGrabando, 250);
   actualizarBtnEnviar();
-  /* Si soltó el botón mientras se pedía el permiso del micrófono, la
-     "grabación" dura un instante y el mínimo de 1 s la descarta sola. */
-  if (soltarAlGrabar) detenerGrabacion();
+  /* Si tocó cancelar mientras se pedía el permiso del micrófono, la
+     grabación se detiene enseguida y se descarta. */
+  if (cancelarAlGrabar) cancelarGrabacion();
 }
 
-function detenerGrabacion() {
-  if (grabIniciando) { soltarAlGrabar = true; return; }
+/* ➤ de la barra de grabación (o tocar el micrófono otra vez): detiene
+   la grabación y la nota se envía sola al detenerse. */
+function enviarGrabacion() {
+  if (recorder && recorder.state === 'recording') recorder.stop();
+}
+
+/* 🗑️ de la barra de grabación: detiene y DESCARTA la nota, no se envía. */
+function cancelarGrabacion() {
+  descartarGrab = true;
+  if (grabIniciando) { cancelarAlGrabar = true; return; }
   if (recorder && recorder.state === 'recording') recorder.stop();
 }
 
 const btnAudioEl = $('btn-audio');
-btnAudioEl.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  /* Con la captura del puntero, el pointerup llega al botón aunque el
-     dedo o el mouse se haya movido un poco fuera de él. */
-  try { btnAudioEl.setPointerCapture(e.pointerId); } catch (err) { /* sin captura: valen igual los eventos */ }
-  empezarGrabacion();
+btnAudioEl.addEventListener('click', () => {
+  /* Un toque: si no se está grabando, empieza; si ya se está grabando,
+     el toque detiene y envía (igual que el ➤ de la barra). */
+  if (recorder && recorder.state === 'recording') enviarGrabacion();
+  else empezarGrabacion();
 });
-for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
-  btnAudioEl.addEventListener(ev, (e) => { e.preventDefault(); detenerGrabacion(); });
-}
-/* Al mantener apretado no deben salir el menú contextual ni el callout
-   de iOS (el CSS del botón ya quita la selección y el callout). */
+$('btn-audio-enviar').addEventListener('click', enviarGrabacion);
+$('btn-audio-cancelar').addEventListener('click', cancelarGrabacion);
+/* Sin mantener apretado ya no hace falta capturar el puntero; se deja
+   el contextmenu bloqueado por si el dedo se demora sobre el botón. */
 btnAudioEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
 /* ------------- Opciones del mensaje: responder y eliminar -------------
