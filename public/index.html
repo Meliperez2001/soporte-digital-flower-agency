@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Soporte DFA">
-<link rel="stylesheet" href="/styles.css?v=28">
+<link rel="stylesheet" href="/styles.css?v=29">
 </head>
 <body>
 <header class="topbar">
@@ -93,6 +93,18 @@
     <p class="muted small">Busca a la creadora por su nombre o su @ de TikTok y toca <strong>Escribir</strong> pa' abrir una conversación directa con ella, sin esperar a que ella abra un caso. Tu mensaje le llega con notificación a su teléfono si las tiene activadas.</p>
     <input type="search" id="buscar-creadora" placeholder="Buscar por nombre o @ de TikTok…">
     <div id="lista-creadoras" class="lista-usuarias"></div>
+  </section>
+  <section id="panel-anuncios" class="card" hidden>
+    <h3>📣 Anuncios</h3>
+    <div id="form-anuncio" hidden>
+      <textarea id="anuncio-texto" rows="3" placeholder="Escribe el anuncio para todas las creadoras…"></textarea>
+      <div class="row">
+        <button id="btn-publicar-anuncio" class="btn btn-primary" type="button">Publicar anuncio</button>
+      </div>
+      <p class="error" id="anuncio-error"></p>
+    </div>
+    <div id="lista-anuncios" class="lista-anuncios"></div>
+    <p id="anuncios-vacio" class="muted small" hidden>Todavía no hay anuncios.</p>
   </section>
   <div id="lista-casos" class="lista-casos"></div>
   <p id="lista-vacia" class="muted" hidden>Todavía no hay casos aquí.</p>
@@ -277,6 +289,6 @@
   <small id="version-pie" class="version-sello"></small>
 </footer>
 
-<script src="/app.js?v=28"></script>
+<script src="/app.js?v=29"></script>
 </body>
 </html>
