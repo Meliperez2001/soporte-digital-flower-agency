@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v27';
+const APP_VERSION = 'v28';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
