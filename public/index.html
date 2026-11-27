@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Soporte DFA">
-<link rel="stylesheet" href="/styles.css?v=27">
+<link rel="stylesheet" href="/styles.css?v=28">
 </head>
 <body>
 <header class="topbar">
@@ -251,7 +251,11 @@
       <button id="btn-audio" class="btn btn-icon" title="Grabar nota de voz" type="button">🎤</button>
       <button id="btn-enviar" class="btn btn-icon btn-enviar" title="Enviar mensaje" type="button" hidden>➤</button>
     </div>
-    <p id="grabando" class="grabando" hidden>🔴 Grabando 0:00 · Suelta el micrófono para enviar</p>
+    <div id="grabando" class="grabando" hidden>
+      <button id="btn-audio-cancelar" class="btn btn-icon btn-grab-cancelar" type="button" title="Cancelar y borrar la nota de voz">🗑️</button>
+      <span id="grabando-tiempo">🔴 Grabando 0:00</span>
+      <button id="btn-audio-enviar" class="btn btn-icon btn-enviar" type="button" title="Enviar nota de voz">➤</button>
+    </div>
     <input type="file" id="input-foto" hidden accept="image/*">
     <input type="file" id="input-video" hidden accept="video/*">
     <input type="file" id="input-archivo" hidden accept="application/pdf,.doc,.docx,.txt,.zip,.xls,.xlsx,.ppt,.pptx,audio/*">
@@ -273,6 +277,6 @@
   <small id="version-pie" class="version-sello"></small>
 </footer>
 
-<script src="/app.js?v=27"></script>
+<script src="/app.js?v=28"></script>
 </body>
 </html>
