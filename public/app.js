@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -118,6 +118,7 @@ function salir() {
   $('btn-vista-creadora').hidden = true; $('franja-preview').hidden = true;
   $('btn-usuarias').hidden = true; $('panel-usuarias').hidden = true;
   $('btn-directorio').hidden = true; $('panel-directorio').hidden = true;
+  $('panel-anuncios').hidden = true;
   cerrarMenuCaso();
   mostrar('vista-auth');
 }
@@ -370,7 +371,60 @@ async function escribirDirecto(id) {
 }
 
 /* ---------------- Lista de casos ---------------- */
+/* ---------------- Anuncios (v29) ----------------
+   Sección visible para TODAS las usuarias arriba de la lista de casos,
+   del más reciente al más viejo y con su fecha. Solo las cuentas
+   administradoras ven el formulario de publicar y el botón de borrar
+   (el servidor además lo exige: POST/DELETE son solo-admin). */
+function fechaAnuncio(iso) {
+  try {
+    return new Date(iso).toLocaleString('es', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch (e) { return ''; }
+}
+async function cargarAnuncios() {
+  if (!yo) return;
+  try {
+    const { anuncios } = await api('/api/anuncios');
+    const esAdmin = rolVista() === 'admin';
+    $('form-anuncio').hidden = !esAdmin;
+    /* Sin anuncios y sin ser admin, la sección ni se muestra. */
+    $('panel-anuncios').hidden = !esAdmin && !anuncios.length;
+    $('anuncios-vacio').hidden = anuncios.length > 0;
+    $('lista-anuncios').innerHTML = anuncios.map((a) => `
+      <article class="anuncio-item">
+        <p class="anuncio-texto">${linkify(esc(a.texto)).replace(/\n/g, '<br>')}</p>
+        <div class="anuncio-pie">
+          <span class="muted small">${esc(a.autorNombre || 'Equipo')} · ${fechaAnuncio(a.createdAt)}</span>
+          ${esAdmin ? `<button type="button" class="btn btn-ghost anuncio-borrar" data-borrar-anuncio="${a.id}" title="Borrar anuncio">🗑️ Borrar</button>` : ''}
+        </div>
+      </article>`).join('');
+    for (const b of $('lista-anuncios').querySelectorAll('[data-borrar-anuncio]')) {
+      b.onclick = () => borrarAnuncio(Number(b.dataset.borrarAnuncio));
+    }
+  } catch (e) { /* si los anuncios fallan, la lista de casos sigue */ }
+}
+$('btn-publicar-anuncio').onclick = async () => {
+  if (bloqueadoPorPreview()) return;
+  const texto = $('anuncio-texto').value.trim();
+  $('anuncio-error').textContent = '';
+  if (!texto) { $('anuncio-error').textContent = 'Escribe el anuncio antes de publicarlo.'; return; }
+  try {
+    await api('/api/anuncios', { method: 'POST', body: JSON.stringify({ texto }) });
+    $('anuncio-texto').value = '';
+    cargarAnuncios();
+  } catch (e) { $('anuncio-error').textContent = e.message; }
+};
+async function borrarAnuncio(id) {
+  if (bloqueadoPorPreview()) return;
+  if (!confirm('¿Borrar este anuncio? Dejará de verse para todas las creadoras.')) return;
+  try {
+    await api('/api/anuncios/' + id, { method: 'DELETE' });
+    cargarAnuncios();
+  } catch (e) { alert(e.message); }
+}
+
 async function cargarLista() {
+  cargarAnuncios();
   if (vistaPrevia) {
     /* Vista previa: se muestra la lista como la vería una creadora sin casos.
        Los casos reales de la agencia NO se cargan ni se pintan aquí. */
