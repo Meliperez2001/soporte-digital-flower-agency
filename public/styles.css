@@ -496,15 +496,20 @@ h3{color:var(--purpura-oscuro)}
 .menu-mas button:hover .menu-ico{filter:brightness(1.08)}
 .stickers{display:flex;gap:6px;flex-wrap:wrap;padding:8px 4px}
 .stickers button{font-size:30px;background:var(--rosa-suave);border:1px solid var(--borde);border-radius:12px;padding:6px 10px;cursor:pointer}
-.grabando{color:var(--grave);font-size:13px;margin:8px 2px 0}
-/* Micrófono de mantener apretado (tipo WhatsApp): sin esto, al dejar el
-   dedo encima iOS muestra el callout/menú contextual y el navegador
-   intenta seleccionar o desplazar en vez de grabar. */
+/* Barra de grabación (v28, tocar para grabar): tiempo al centro y los
+   controles de la nota a los lados — 🗑️ cancelar a la izquierda y
+   ➤ enviar a la derecha. El [hidden] manda sobre el flex. */
+.grabando{display:flex;align-items:center;gap:12px;color:var(--grave);font-size:14px;margin:8px 2px 0}
+.grabando[hidden]{display:none}
+.grabando #grabando-tiempo{flex:1;text-align:center;font-variant-numeric:tabular-nums}
+.grabando .btn-grab-cancelar{background:transparent;border-color:var(--borde);font-size:17px}
+/* Micrófono de un toque (tipo WhatsApp): sin selección ni callout de
+   iOS si el dedo se demora un instante sobre el botón. */
 #btn-audio{
-  touch-action:none;-webkit-user-select:none;user-select:none;
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;
   -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
 }
-/* Estado visual mientras se graba (botón apretado): se tiñe y crece. */
+/* Estado visual mientras se graba: se tiñe y crece. */
 #btn-audio.grabando-on{background:var(--rosa);border-color:var(--rosa);transform:scale(1.15)}
 .pie{text-align:center;color:var(--muted);padding:10px 14px;font-size:13px;flex:none}
 /* Sello de versión visible (v18): texto pequeño «Soporte DFA · vNN» en
