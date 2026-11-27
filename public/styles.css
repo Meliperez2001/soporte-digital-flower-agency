@@ -499,6 +499,14 @@ h3{color:var(--purpura-oscuro)}
 /* Barra de grabación (v28, tocar para grabar): tiempo al centro y los
    controles de la nota a los lados — 🗑️ cancelar a la izquierda y
    ➤ enviar a la derecha. El [hidden] manda sobre el flex. */
+/* Anuncios (v29): panel arriba de la lista de casos, visible para todas;
+   cada anuncio es una tarjetita con su texto, autor y fecha. */
+.lista-anuncios{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.anuncio-item{background:var(--rosa-suave);border:1px solid var(--borde);border-radius:12px;padding:10px 12px}
+.anuncio-texto{margin:0}
+.anuncio-pie{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.anuncio-borrar{font-size:12px;padding:2px 8px}
+#anuncio-texto{width:100%;box-sizing:border-box;border:1px solid var(--borde);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit;resize:vertical}
 .grabando{display:flex;align-items:center;gap:12px;color:var(--grave);font-size:14px;margin:8px 2px 0}
 .grabando[hidden]{display:none}
 .grabando #grabando-tiempo{flex:1;text-align:center;font-variant-numeric:tabular-nums}
