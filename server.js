@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
@@ -269,6 +269,54 @@ function extractoPush(msg) {
   if (msg.tipo === 'archivo') return 'Te enviaron un adjunto 📎 ' + String(msg.nombreArchivo || '');
   return 'Tienes un mensaje nuevo';
 }
+
+/* ------------------------------------------------------------------ */
+/* Anuncios (v29, pedido de Mell el 27/11/2026)                        */
+/*                                                                     */
+/* Una sección de anuncios generales del equipo, visible para TODAS    */
+/* las usuarias al entrar a la app (arriba de su lista de casos):      */
+/* mensajes tipo «Hola chicos, ya estamos trabajando en sus casos».    */
+/* Solo las administradoras publican y borran; las creadoras solo      */
+/* leen. Viven en db.anuncios y al publicar se manda además un aviso   */
+/* push a las creadoras suscritas.                                     */
+/* ------------------------------------------------------------------ */
+if (!Array.isArray(db.anuncios)) db.anuncios = [];
+if (!db.seq) db.seq = { user: 1, caso: 1, msg: 1 };
+if (!db.seq.anuncio) db.seq.anuncio = db.anuncios.reduce((m, a) => Math.max(m, a.id || 0), 0) + 1;
+
+app.get('/api/anuncios', auth, (req, res) => {
+  const lista = db.anuncios.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  res.json({ anuncios: lista });
+});
+app.post('/api/anuncios', auth, soloAdmin, (req, res) => {
+  const texto = String((req.body || {}).texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'Escribe el anuncio antes de publicarlo.' });
+  const anuncio = {
+    id: nextId('anuncio'),
+    texto: texto.slice(0, 2000),
+    autorNombre: req.user.nombre,
+    createdAt: new Date().toISOString(),
+  };
+  db.anuncios.push(anuncio);
+  save();
+  res.json({ anuncio });
+  /* Aviso push a las creadoras suscritas (v29): el anuncio también les
+     llega como notificación aunque tengan la app cerrada. */
+  try {
+    enviarPush(db.users.filter((u) => u.rol !== 'admin').map((u) => u.id), {
+      title: '📣 Anuncio de Digital Flower Agency',
+      body: anuncio.texto.slice(0, 120),
+    });
+  } catch (e) { /* el aviso es un extra */ }
+});
+app.delete('/api/anuncios/:id', auth, soloAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const antes = db.anuncios.length;
+  db.anuncios = db.anuncios.filter((a) => a.id !== id);
+  if (db.anuncios.length === antes) return res.status(404).json({ error: 'Ese anuncio ya no existe.' });
+  save();
+  res.json({ ok: true });
+});
 
 /* ------------------------------------------------------------------ */
 /* Mi perfil: nombre y foto                                            */
