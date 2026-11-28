@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
    si un teléfono sirve una carcasa vieja, el sello lo delata (muestra
    la versión vieja o no aparece) y no hay que adivinar si un problema
    visual es caché o un bug real. */
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v30';
 for (const idSello of ['version-pie', 'version-perfil']) {
   const sello = $(idSello);
   if (sello) sello.textContent = 'Soporte DFA · ' + APP_VERSION;
@@ -381,11 +381,53 @@ function fechaAnuncio(iso) {
     return new Date(iso).toLocaleString('es', { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   } catch (e) { return ''; }
 }
+/* Reacciones y comentarios de los anuncios (v30, pedido de Mell el
+   27/11/2026): los anuncios son el espacio común — todas ven las
+   reacciones y los comentarios de las demás, como en una publicación.
+   Los chats de los casos siguen privados y entre creadoras no hay
+   mensajes directos. La barra de emojis abierta y el comentario a
+   medio escribir se conservan entre repintados, pa' que reaccionar
+   en un anuncio no borre lo que se estaba escribiendo en otro. */
+const barrasReaccAbiertas = new Set();
+const EMOJIS_RAPIDOS_ANUNCIO = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+function reaccionesAnuncioHTML(a) {
+  if (!a.reacciones) return '';
+  const chips = Object.entries(a.reacciones)
+    .filter(([, u]) => Array.isArray(u) && u.length)
+    .map(([e, u]) => `<button type="button" class="reaccion${yo && u.includes(yo.id) ? ' mia' : ''}" data-reacc-anuncio="${a.id}" data-emoji="${e}" title="Toca para poner o quitar tu reacción">${e}${u.length > 1 ? ' ' + u.length : ''}</button>`)
+    .join('');
+  return chips ? `<div class="reacciones">${chips}</div>` : '';
+}
+function barraReaccAnuncioHTML(a) {
+  if (!barrasReaccAbiertas.has(a.id)) return '';
+  return `<div class="anuncio-reacc-bar">
+    ${EMOJIS_RAPIDOS_ANUNCIO.map((e) => `<button type="button" data-reacc-anuncio="${a.id}" data-emoji="${e}" title="Reaccionar con ${e}">${e}</button>`).join('')}
+    <input type="text" class="anuncio-reacc-input" data-reacc-input-anuncio="${a.id}" placeholder="Otro emoji de tu teclado…" autocomplete="off">
+  </div>`;
+}
+function comentariosAnuncioHTML(a, esAdmin) {
+  const lista = (a.comentarios || []).map((c) => `
+    <div class="comentario">
+      <p class="comentario-texto"><strong>${esc(c.autorNombre || 'Usuaria')}:</strong> ${linkify(esc(c.texto)).replace(/\n/g, '<br>')} <span class="muted small">· ${fechaAnuncio(c.createdAt)}</span></p>
+      ${(esAdmin || (yo && c.autorId === yo.id)) ? `<button type="button" class="btn btn-ghost comentario-borrar" data-borrar-comentario="${a.id}:${c.id}" title="Borrar comentario">🗑️</button>` : ''}
+    </div>`).join('');
+  return `
+    <div class="comentarios">${lista}</div>
+    <div class="comentario-form">
+      <input type="text" class="comentario-input" data-comentario-input="${a.id}" placeholder="Escribe un comentario…" maxlength="1000" autocomplete="off">
+      <button type="button" class="btn btn-primary comentario-enviar" data-comentar="${a.id}">Comentar</button>
+    </div>`;
+}
 async function cargarAnuncios() {
   if (!yo) return;
   try {
     const { anuncios } = await api('/api/anuncios');
     const esAdmin = rolVista() === 'admin';
+    /* Borradores de comentarios a medio escribir, por anuncio. */
+    const borradores = {};
+    for (const inp of $('lista-anuncios').querySelectorAll('[data-comentario-input]')) {
+      if (inp.value) borradores[inp.dataset.comentarioInput] = inp.value;
+    }
     $('form-anuncio').hidden = !esAdmin;
     /* Sin anuncios y sin ser admin, la sección ni se muestra. */
     $('panel-anuncios').hidden = !esAdmin && !anuncios.length;
@@ -397,11 +439,84 @@ async function cargarAnuncios() {
           <span class="muted small">${esc(a.autorNombre || 'Equipo')} · ${fechaAnuncio(a.createdAt)}</span>
           ${esAdmin ? `<button type="button" class="btn btn-ghost anuncio-borrar" data-borrar-anuncio="${a.id}" title="Borrar anuncio">🗑️ Borrar</button>` : ''}
         </div>
+        ${reaccionesAnuncioHTML(a)}
+        <div class="anuncio-acciones">
+          <button type="button" class="btn btn-ghost anuncio-accion" data-toggle-reacc="${a.id}">😊 Reaccionar</button>
+          <span class="muted small">💬 ${(a.comentarios || []).length} comentario${(a.comentarios || []).length === 1 ? '' : 's'}</span>
+        </div>
+        ${barraReaccAnuncioHTML(a)}
+        ${comentariosAnuncioHTML(a, esAdmin)}
       </article>`).join('');
+    for (const inp of $('lista-anuncios').querySelectorAll('[data-comentario-input]')) {
+      const v = borradores[inp.dataset.comentarioInput];
+      if (v) inp.value = v;
+    }
     for (const b of $('lista-anuncios').querySelectorAll('[data-borrar-anuncio]')) {
       b.onclick = () => borrarAnuncio(Number(b.dataset.borrarAnuncio));
     }
+    for (const b of $('lista-anuncios').querySelectorAll('[data-reacc-anuncio]')) {
+      b.onclick = () => enviarReaccionAnuncio(Number(b.dataset.reaccAnuncio), b.dataset.emoji);
+    }
+    for (const b of $('lista-anuncios').querySelectorAll('[data-toggle-reacc]')) {
+      b.onclick = () => {
+        const id = Number(b.dataset.toggleReacc);
+        if (barrasReaccAbiertas.has(id)) barrasReaccAbiertas.delete(id); else barrasReaccAbiertas.add(id);
+        cargarAnuncios();
+      };
+    }
+    for (const b of $('lista-anuncios').querySelectorAll('[data-comentar]')) {
+      b.onclick = () => comentarAnuncio(Number(b.dataset.comentar));
+    }
+    for (const b of $('lista-anuncios').querySelectorAll('[data-borrar-comentario]')) {
+      b.onclick = () => {
+        const partes = b.dataset.borrarComentario.split(':').map(Number);
+        borrarComentarioAnuncio(partes[0], partes[1]);
+      };
+    }
+    for (const inp of $('lista-anuncios').querySelectorAll('[data-comentario-input]')) {
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); comentarAnuncio(Number(inp.dataset.comentarioInput)); }
+      });
+    }
+    for (const inp of $('lista-anuncios').querySelectorAll('[data-reacc-input-anuncio]')) {
+      inp.addEventListener('input', () => {
+        const v = inp.value.trim();
+        if (!v) return;
+        let emoji = v;
+        try { emoji = [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(v)][0].segment; }
+        catch (err) { emoji = [...v][0]; }
+        if (!emoji || /[\p{L}\p{N}\s]/u.test(emoji)) return;
+        inp.value = '';
+        enviarReaccionAnuncio(Number(inp.dataset.reaccInputAnuncio), emoji);
+      });
+    }
   } catch (e) { /* si los anuncios fallan, la lista de casos sigue */ }
+}
+async function enviarReaccionAnuncio(id, emoji) {
+  if (bloqueadoPorPreview()) return;
+  try {
+    await api(`/api/anuncios/${id}/reaccion`, { method: 'POST', body: JSON.stringify({ emoji }) });
+    cargarAnuncios();
+  } catch (e) { alert(e.message); }
+}
+async function comentarAnuncio(id) {
+  if (bloqueadoPorPreview()) return;
+  const inp = $('lista-anuncios').querySelector(`[data-comentario-input="${id}"]`);
+  const texto = inp ? inp.value.trim() : '';
+  if (!texto) return;
+  try {
+    await api(`/api/anuncios/${id}/comentarios`, { method: 'POST', body: JSON.stringify({ texto }) });
+    if (inp) inp.value = '';
+    cargarAnuncios();
+  } catch (e) { alert(e.message); }
+}
+async function borrarComentarioAnuncio(aid, cid) {
+  if (bloqueadoPorPreview()) return;
+  if (!confirm('¿Borrar este comentario?')) return;
+  try {
+    await api(`/api/anuncios/${aid}/comentarios/${cid}`, { method: 'DELETE' });
+    cargarAnuncios();
+  } catch (e) { alert(e.message); }
 }
 $('btn-publicar-anuncio').onclick = async () => {
   if (bloqueadoPorPreview()) return;
