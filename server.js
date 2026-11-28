@@ -192,7 +192,7 @@ app.get('/api/me', auth, (req, res) => res.json({ user: publicUser(req.user) }))
    versión más nueva que la copia instalada. Debe coincidir con
    APP_VERSION de public/app.js; ambas se suben juntas en cada
    despliegue. Es solo una etiqueta, sin datos de nadie. */
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v30';
 app.get('/api/version', (req, res) => res.json({ version: APP_VERSION }));
 
 /* ------------------------------------------------------------------ */
@@ -283,6 +283,13 @@ function extractoPush(msg) {
 if (!Array.isArray(db.anuncios)) db.anuncios = [];
 if (!db.seq) db.seq = { user: 1, caso: 1, msg: 1 };
 if (!db.seq.anuncio) db.seq.anuncio = db.anuncios.reduce((m, a) => Math.max(m, a.id || 0), 0) + 1;
+if (!db.seq.comentario) db.seq.comentario = db.anuncios.reduce((m, a) => (a.comentarios || []).reduce((x, c) => Math.max(x, c.id || 0), m), 0) + 1;
+/* Anuncios viejos (v29) sin reacciones ni comentarios: se les ponen
+   los campos vacíos al arrancar (v30). */
+for (const a of db.anuncios) {
+  if (!a.reacciones || typeof a.reacciones !== 'object') a.reacciones = {};
+  if (!Array.isArray(a.comentarios)) a.comentarios = [];
+}
 
 app.get('/api/anuncios', auth, (req, res) => {
   const lista = db.anuncios.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -296,6 +303,8 @@ app.post('/api/anuncios', auth, soloAdmin, (req, res) => {
     texto: texto.slice(0, 2000),
     autorNombre: req.user.nombre,
     createdAt: new Date().toISOString(),
+    reacciones: {},
+    comentarios: [],
   };
   db.anuncios.push(anuncio);
   save();
@@ -314,6 +323,91 @@ app.delete('/api/anuncios/:id', auth, soloAdmin, (req, res) => {
   const antes = db.anuncios.length;
   db.anuncios = db.anuncios.filter((a) => a.id !== id);
   if (db.anuncios.length === antes) return res.status(404).json({ error: 'Ese anuncio ya no existe.' });
+  save();
+  res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ */
+/* Reacciones y comentarios de los anuncios (v30, pedido de Mell el    */
+/* 27/11/2026)                                                         */
+/*                                                                     */
+/* Los anuncios son el espacio COMÚN de la plataforma: todas las       */
+/* usuarias ven las reacciones y los comentarios de las demás, como    */
+/* en una publicación. Esto NO abre nada más: los chats de los casos   */
+/* siguen siendo privados entre cada creadora y el equipo, y en la     */
+/* plataforma NO hay mensajes directos entre creadoras (el único       */
+/* «directo» que existe lo abre una administradora hacia una           */
+/* creadora, nunca entre ellas).                                       */
+/*                                                                     */
+/* Las reacciones aceptan CUALQUIER emoji, con la misma validación     */
+/* que las de los mensajes (un solo grafema, sin letras, números ni    */
+/* espacios), y tocar la misma reacción la quita. Se guardan en el     */
+/* anuncio como { emoji: [ids de usuario] }. Los comentarios viven     */
+/* en anuncio.comentarios con su autora y su fecha; cada quien borra   */
+/* los suyos y las administradoras pueden borrar cualquiera. Cuando    */
+/* una creadora comenta, las administradoras reciben un aviso push.    */
+/* ------------------------------------------------------------------ */
+function emojiValido(emoji) {
+  if (!emoji || emoji.length > 16 || /[\p{L}\p{N}\s]/u.test(emoji)) return false;
+  try {
+    return [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(emoji)].length === 1;
+  } catch (e) { return [...emoji].length <= 4; }
+}
+function getAnuncio(req, res) {
+  const a = db.anuncios.find((x) => x.id === Number(req.params.id));
+  if (!a) { res.status(404).json({ error: 'Ese anuncio ya no existe.' }); return null; }
+  if (!a.reacciones || typeof a.reacciones !== 'object') a.reacciones = {};
+  if (!Array.isArray(a.comentarios)) a.comentarios = [];
+  return a;
+}
+app.post('/api/anuncios/:id/reaccion', auth, (req, res) => {
+  const anuncio = getAnuncio(req, res);
+  if (!anuncio) return;
+  const emoji = String((req.body || {}).emoji || '').trim();
+  if (!emojiValido(emoji)) return res.status(400).json({ error: 'Reacción no válida.' });
+  const lista = Array.isArray(anuncio.reacciones[emoji]) ? anuncio.reacciones[emoji] : [];
+  const i = lista.indexOf(req.user.id);
+  if (i === -1) lista.push(req.user.id); else lista.splice(i, 1);
+  if (lista.length) anuncio.reacciones[emoji] = lista; else delete anuncio.reacciones[emoji];
+  save();
+  res.json({ reacciones: anuncio.reacciones });
+});
+app.post('/api/anuncios/:id/comentarios', auth, (req, res) => {
+  const anuncio = getAnuncio(req, res);
+  if (!anuncio) return;
+  const texto = String((req.body || {}).texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'Escribe el comentario antes de enviarlo.' });
+  const comentario = {
+    id: nextId('comentario'),
+    autorId: req.user.id,
+    autorNombre: req.user.nombre,
+    texto: texto.slice(0, 1000),
+    createdAt: new Date().toISOString(),
+  };
+  anuncio.comentarios.push(comentario);
+  save();
+  res.json({ comentario });
+  /* Aviso push a las administradoras cuando comenta una creadora,
+     pa' que el equipo se entere sin tener que abrir la app. */
+  if (req.user.rol !== 'admin') {
+    try {
+      enviarPush(idsAdministradoras(), {
+        title: '💬 Nuevo comentario en un anuncio',
+        body: `${req.user.nombre}: ${comentario.texto.slice(0, 100)}`,
+      });
+    } catch (e) { /* el aviso es un extra */ }
+  }
+});
+app.delete('/api/anuncios/:id/comentarios/:cid', auth, (req, res) => {
+  const anuncio = getAnuncio(req, res);
+  if (!anuncio) return;
+  const cid = Number(req.params.cid);
+  const c = anuncio.comentarios.find((x) => x.id === cid);
+  if (!c) return res.status(404).json({ error: 'Ese comentario ya no existe.' });
+  if (req.user.rol !== 'admin' && c.autorId !== req.user.id) {
+    return res.status(403).json({ error: 'Solo puedes borrar tus propios comentarios.' });
+  }
+  anuncio.comentarios = anuncio.comentarios.filter((x) => x.id !== cid);
   save();
   res.json({ ok: true });
 });
