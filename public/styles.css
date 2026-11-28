@@ -507,6 +507,24 @@ h3{color:var(--purpura-oscuro)}
 .anuncio-pie{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
 .anuncio-borrar{font-size:12px;padding:2px 8px}
 #anuncio-texto{width:100%;box-sizing:border-box;border:1px solid var(--borde);border-radius:10px;padding:10px;font:inherit;background:transparent;color:inherit;resize:vertical}
+/* Reacciones y comentarios de los anuncios (v30): los chips reusan el
+   estilo .reaccion de los mensajes; la barra trae los emojis rápidos
+   y un campo pa' cualquier otro emoji del teclado; los comentarios
+   van debajo de cada anuncio, visibles para todas. */
+button.reaccion{font:inherit;cursor:pointer}
+.anuncio-acciones{display:flex;align-items:center;gap:10px;margin-top:8px}
+.anuncio-accion{font-size:13px;padding:2px 8px}
+.anuncio-reacc-bar{display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin-top:6px;background:var(--tarjeta);border:1px solid var(--borde);border-radius:999px;padding:4px 8px}
+.anuncio-reacc-bar button{background:none;border:none;font-size:22px;line-height:1.2;cursor:pointer;padding:2px 5px;border-radius:50%}
+.anuncio-reacc-bar button:hover{background:var(--rosa-suave)}
+.anuncio-reacc-input{flex:1;min-width:110px;border:none;background:transparent;color:var(--texto);font:inherit;font-size:13px;outline:none;padding:4px 2px}
+.comentarios{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.comentario{display:flex;align-items:flex-start;gap:6px;background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:6px 8px}
+.comentario-texto{margin:0;flex:1;word-break:break-word}
+.comentario-borrar{font-size:12px;padding:0 4px}
+.comentario-form{display:flex;gap:6px;margin-top:8px}
+.comentario-input{flex:1;min-width:0;border:1px solid var(--borde);border-radius:999px;padding:7px 12px;font:inherit;background:transparent;color:var(--texto)}
+.comentario-enviar{white-space:nowrap}
 .grabando{display:flex;align-items:center;gap:12px;color:var(--grave);font-size:14px;margin:8px 2px 0}
 .grabando[hidden]{display:none}
 .grabando #grabando-tiempo{flex:1;text-align:center;font-variant-numeric:tabular-nums}
