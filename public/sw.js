@@ -14,8 +14,8 @@
    el JS con ?v=NN para romper cualquier copia vieja al cambiar de
    versión. Flujo al llegar un SW nuevo: skipWaiting al instalar,
    borrado de los cachés viejos al activar y clients.claim. */
-const CACHE = 'soporte-dfa-v29';
-const SHELL = ['/', '/index.html', '/styles.css?v=29', '/app.js?v=29', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'soporte-dfa-v30';
+const SHELL = ['/', '/index.html', '/styles.css?v=30', '/app.js?v=30', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
